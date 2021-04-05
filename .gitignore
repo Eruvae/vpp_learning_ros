@@ -1,0 +1,3 @@
+*.vscode
+*.capnp.c++
+*.capnp.h
