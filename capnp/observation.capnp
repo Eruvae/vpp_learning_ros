@@ -8,4 +8,7 @@ struct Observation {
 
   width @4 :UInt32;
   height @5 :UInt32;
+  layers @6 :UInt32;
+
+  foundRois @7 :UInt32;
 }

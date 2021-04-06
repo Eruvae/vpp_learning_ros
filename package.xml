@@ -57,6 +57,7 @@
   <depend>octomap_msgs</depend>
   <depend>octomap_vpp</depend>
   <depend>moveit_ros_planning_interface</depend>
+  <depend>pointcloud_roi_msgs</depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>

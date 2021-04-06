@@ -35,9 +35,11 @@ struct Pose {
 }
 
 struct Action {
-  data :union {
+  union {
     none @0 :Void;
-    direction @1 :Direction;
-    goalPose @2 :Pose;
+    reset @1 :Void;
+    direction @2 :Direction;
+    goalPose @3 :Pose;
+    relativePose @4 :Pose;
   }
 }
