@@ -11,4 +11,5 @@ struct Observation {
   layers @6 :UInt32;
 
   foundRois @7 :UInt32;
+  planningTime @8 :Float64;
 }

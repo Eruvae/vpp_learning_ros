@@ -49,6 +49,7 @@ int main(int argc, char **argv)
   OctreeManager oc_manager(nh, tfBuffer, map_frame, tree_resolution);
   RobotController controller(nh, tfBuffer, map_frame);
   controller.reset();
+  oc_manager.resetOctomap();
 
   while(ros::ok())
   {
@@ -59,6 +60,7 @@ int main(int argc, char **argv)
       kj::ArrayPtr dataPtr(reinterpret_cast<capnp::word*>(request.data()), request.size()/sizeof(capnp::word));
       capnp::FlatArrayMessageReader reader(dataPtr);
       Action::Reader act = reader.getRoot<Action>();
+      double planning_time = 0;
       switch (act.which())
       {
       case Action::NONE:
@@ -82,14 +84,18 @@ int main(int argc, char **argv)
       {
         geometry_msgs::Pose pose = fromActionMsg(act.getGoalPose());
         ROS_INFO_STREAM("Action: GoalPose received - " << pose);
+        ros::Time planning_start = ros::Time::now();
         bool success = controller.moveToPose(pose);
+        planning_time = (ros::Time::now() - planning_start).toSec();
         break;
       }
       case Action::RELATIVE_POSE:
       {
         geometry_msgs::Pose pose = fromActionMsg(act.getRelativePose());
         ROS_INFO_STREAM("Action: RelativePose received - " << pose);
+        ros::Time planning_start = ros::Time::now();
         bool success = controller.moveToPoseRelative(pose);
+        planning_time = (ros::Time::now() - planning_start).toSec();
         break;
       }
       }
@@ -101,18 +107,21 @@ int main(int argc, char **argv)
       capnp::MallocMessageBuilder builder;
       Observation::Builder obs = builder.initRoot<Observation>();
 
-      oc_manager.fillObservation(obs, cur_pose, 36, 18, 5, 5.0);
-      obs.setWidth(36);
-      obs.setHeight(18);
-      obs.setLayers(5);
+      const size_t WIDTH = 36;
+      const size_t HEIGHT = 18;
+      const size_t LAYERS = 5;
+      const double RANGE = 5.0;
+      oc_manager.fillObservation(obs, cur_pose, WIDTH, HEIGHT, LAYERS, RANGE);
+      obs.setWidth(WIDTH);
+      obs.setHeight(HEIGHT);
+      obs.setLayers(LAYERS);
 
-      uint32_t reward;
-      if (act.isReset())
-        reward = 0;
-      else
+      uint32_t reward = 0;
+      if (act.isGoalPose() || act.isRelativePose())
         reward = oc_manager.getReward();
 
       obs.setFoundRois(reward);
+      obs.setPlanningTime(planning_time);
 
       kj::Array<capnp::word> arr = capnp::messageToFlatArray(builder);
       zmq::const_buffer buf(arr.begin(), arr.size()*sizeof(capnp::word));

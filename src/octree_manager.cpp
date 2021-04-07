@@ -126,17 +126,19 @@ void OctreeManager::fillObservation(Observation::Builder &obs, const octomap::po
   double layer_range = range / layers;
 
   tree_mtx.lock();
-  for (size_t theta = 0; theta < theta_steps; theta++)
+  for (size_t t = 0; t < theta_steps; t++)
   {
-    for(size_t phi = 0; phi < phi_steps; phi++)
+    double theta = t*M_PI / theta_steps;
+    for(size_t p = 0; p < phi_steps; p++)
     {
+      double phi = -M_PI + 2*p*M_PI / phi_steps;
       double x = cos(phi) * sin(theta);
       double y = sin(phi) * sin(theta);
       double z = cos(theta);
       octomap::point3d dir(x, y, z);
       for (size_t layer = 0; layer < layers; layer++)
       {
-        size_t flat_index = layer * phi_steps * theta_steps + theta * phi_steps + phi;
+        size_t flat_index = layer * phi_steps * theta_steps + t * phi_steps + p;
         octomap::point3d start = viewpoint.transform(viewpoint.trans() + dir * (layer * layer_range));
         octomap::point3d end = viewpoint.transform(viewpoint.trans() + dir * ((layer+1) * layer_range));
         octomap::KeyRay ray;

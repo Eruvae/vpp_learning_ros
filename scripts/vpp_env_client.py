@@ -20,7 +20,10 @@ class EnvironmentClient:
         freeCount = np.reshape(np.array(obs_msg.freeCount), shape)
         occupiedCount = np.reshape(np.array(obs_msg.occupiedCount), shape)
         roiCount = np.reshape(np.array(obs_msg.roiCount), shape)
-        reward = obs_msg.foundRois
+        if obs_msg.planningTime > 0:
+            reward = obs_msg.foundRois / obs_msg.planningTime
+        else:
+            reward = 0
         return unknownCount, freeCount, occupiedCount, roiCount, reward
 
     def encodeGoalPose(self, action_msg, data):
@@ -67,14 +70,18 @@ class EnvironmentClient:
         return self.sendAction(action_msg)
 
 
-client = EnvironmentClient()
-unknownCount, freeCount, occupiedCount, roiCount, reward = client.sendRelativePose([0.1, 0, 0, 0, 0, 0, 1])
-print("unknownCount")
-print(np.sum(unknownCount))
-print("freeCount")
-print(np.sum(freeCount))
-print("occupiedCount")
-print(np.sum(occupiedCount))
-print("roiCount")
-print(np.sum(roiCount))
-print("Reward", reward)
+def main(args):
+    client = EnvironmentClient()
+    unknownCount, freeCount, occupiedCount, roiCount, reward = client.sendRelativePose([0.1, 0, 0, 0, 0, 0, 1])
+    print("unknownCount")
+    print(unknownCount)
+    print("freeCount")
+    print(freeCount)
+    print("occupiedCount")
+    print(occupiedCount)
+    print("roiCount")
+    print(roiCount)
+    print("Reward", reward)
+
+if __name__ == '__main__':
+    main(sys.argv)
