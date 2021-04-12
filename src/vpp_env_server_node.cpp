@@ -57,7 +57,10 @@ int main(int argc, char **argv)
 
       // receive a request from client
       zmq::recv_result_t res = socket.recv(request, zmq::recv_flags::none);
-      kj::ArrayPtr dataPtr(reinterpret_cast<capnp::word*>(request.data()), request.size()/sizeof(capnp::word));
+      size_t word_size = request.size()/sizeof(capnp::word);
+      std::unique_ptr<capnp::word> msg_newbuf(new capnp::word[word_size]);
+      memcpy(msg_newbuf.get(), request.data(), request.size());
+      kj::ArrayPtr dataPtr(msg_newbuf.get(), word_size);
       capnp::FlatArrayMessageReader reader(dataPtr);
       Action::Reader act = reader.getRoot<Action>();
       double planning_time = 0;
