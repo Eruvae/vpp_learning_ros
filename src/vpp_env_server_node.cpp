@@ -37,9 +37,9 @@ int main(int argc, char **argv)
   socket.bind("tcp://*:5555");
 
   double tree_resolution = nh.param<double>("/roi_viewpoint_planner/tree_resolution", 0.01);
-  std::string wstree_default_package = ros::package::getPath("phenorob_ur5e");
-  std::string wstree_file = nh.param<std::string>("/roi_viewpoint_planner/workspace_tree", wstree_default_package + "/workspace_trees/ur_retractable/workspace_map.ot");
-  std::string sampling_tree_file = nh.param<std::string>("/roi_viewpoint_planner/sampling_tree", wstree_default_package + "/workspace_trees/ur_retractable/inflated_workspace_map.ot");
+  std::string wstree_default_package = ros::package::getPath("ur_with_cam_gazebo");
+  std::string wstree_file = nh.param<std::string>("/roi_viewpoint_planner/workspace_tree", wstree_default_package + "/workspace_trees/ur_with_cam/workspace_map.ot");
+  std::string sampling_tree_file = nh.param<std::string>("/roi_viewpoint_planner/sampling_tree", wstree_default_package + "/workspace_trees/ur_with_cam/workspace_map.ot");
   std::string map_frame = nh.param<std::string>("/roi_viewpoint_planner/map_frame", "world");
   std::string ws_frame = nh.param<std::string>("/roi_viewpoint_planner/ws_frame", "arm_base_link");
 
