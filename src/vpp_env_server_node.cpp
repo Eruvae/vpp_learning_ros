@@ -57,12 +57,15 @@ int main(int argc, char **argv)
 
       // receive a request from client
       zmq::recv_result_t res = socket.recv(request, zmq::recv_flags::none);
+      ros::Time message_received_time = ros::Time::now();
       size_t word_size = request.size()/sizeof(capnp::word);
       std::unique_ptr<capnp::word> msg_newbuf(new capnp::word[word_size]);
       memcpy(msg_newbuf.get(), request.data(), request.size());
       kj::ArrayPtr dataPtr(msg_newbuf.get(), word_size);
       capnp::FlatArrayMessageReader reader(dataPtr);
       Action::Reader act = reader.getRoot<Action>();
+      double msg_decode_time = (ros::Time::now() - message_received_time).toSec();
+      ROS_INFO_STREAM("Decoding message took " << msg_decode_time << "s");
       double planning_time = 0;
       switch (act.which())
       {
@@ -74,8 +77,11 @@ int main(int argc, char **argv)
       case Action::RESET:
       {
         ROS_INFO_STREAM("Action: Reset received");
+        ros::Time reset_start_time = ros::Time::now();
         bool success = controller.reset();
+        double reset_time = (ros::Time::now() - reset_start_time).toSec();
         oc_manager.resetOctomap();
+        ROS_INFO_STREAM("Reset took " << reset_time << "s");
         break;
       }
       case Action::DIRECTION:
@@ -90,6 +96,7 @@ int main(int argc, char **argv)
         ros::Time planning_start = ros::Time::now();
         bool success = controller.moveToPose(pose);
         planning_time = (ros::Time::now() - planning_start).toSec();
+        ROS_INFO_STREAM("Moving took " << planning_time << "s");
         break;
       }
       case Action::RELATIVE_POSE:
@@ -99,6 +106,7 @@ int main(int argc, char **argv)
         ros::Time planning_start = ros::Time::now();
         bool success = controller.moveToPoseRelative(pose);
         planning_time = (ros::Time::now() - planning_start).toSec();
+        ROS_INFO_STREAM("Moving took " << planning_time << "s");
         break;
       }
       }
@@ -110,6 +118,8 @@ int main(int argc, char **argv)
       capnp::MallocMessageBuilder builder;
       Observation::Builder obs = builder.initRoot<Observation>();
 
+      ros::Time obs_comp_start_time = ros::Time::now();
+
       const size_t WIDTH = 36;
       const size_t HEIGHT = 18;
       const size_t LAYERS = 5;
@@ -119,6 +129,10 @@ int main(int argc, char **argv)
       obs.setHeight(HEIGHT);
       obs.setLayers(LAYERS);
 
+      double obs_comp_time = (ros::Time::now() - obs_comp_start_time).toSec();
+      ROS_INFO_STREAM("Computing observation took " << obs_comp_time << "s");
+
+      ros::Time reward_comp_start_time = ros::Time::now();
       uint32_t reward = 0;
       if (act.isGoalPose() || act.isRelativePose())
         reward = oc_manager.getReward();
@@ -126,8 +140,15 @@ int main(int argc, char **argv)
       obs.setFoundRois(reward);
       obs.setPlanningTime(planning_time);
 
+      double reward_comp_time = (ros::Time::now() - reward_comp_start_time).toSec();
+      ROS_INFO_STREAM("Computing reward took " << reward_comp_time << "s");
+
+      ros::Time message_encode_start_time = ros::Time::now();
       kj::Array<capnp::word> arr = capnp::messageToFlatArray(builder);
       zmq::const_buffer buf(arr.begin(), arr.size()*sizeof(capnp::word));
+
+      double message_encode_time = (ros::Time::now() - message_encode_start_time).toSec();
+      ROS_INFO_STREAM("Encoding message took " << message_encode_time << "s");
 
       // send the reply to the client
       socket.send(buf, zmq::send_flags::none);

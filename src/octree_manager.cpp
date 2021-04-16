@@ -17,13 +17,13 @@ void OctreeManager::registerPointcloudWithRoi(const ros::MessageEvent<pointcloud
   bool cloud_in_map_frame = (roi.cloud.header.frame_id == map_frame);
   if (cloud_in_map_frame)
   {
-    ROS_INFO_STREAM("Incoming cloud already in target frame");
+    //ROS_INFO_STREAM("Incoming cloud already in target frame");
     //pcFrameTf.header = roi.cloud.header;
     pcFrameTf.transform = roi.transform;
   }
   else
   {
-    ROS_INFO_STREAM("Convert incoming cloud (" << roi.cloud.header.frame_id << ") to map frame (" << map_frame << "), assuming no transform in incoming data");
+    //ROS_INFO_STREAM("Convert incoming cloud (" << roi.cloud.header.frame_id << ") to map frame (" << map_frame << "), assuming no transform in incoming data");
     try
     {
       pcFrameTf = tfBuffer.lookupTransform(map_frame, roi.cloud.header.frame_id, roi.cloud.header.stamp);
