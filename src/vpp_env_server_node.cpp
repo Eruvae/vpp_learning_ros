@@ -63,18 +63,18 @@ int main(int argc, char **argv)
       memcpy(msg_newbuf.get(), request.data(), request.size());
       kj::ArrayPtr dataPtr(msg_newbuf.get(), word_size);
       capnp::FlatArrayMessageReader reader(dataPtr);
-      Action::Reader act = reader.getRoot<Action>();
+      vpp_msg::Action::Reader act = reader.getRoot<vpp_msg::Action>();
       double msg_decode_time = (ros::Time::now() - message_received_time).toSec();
       ROS_INFO_STREAM("Decoding message took " << msg_decode_time << "s");
       double planning_time = 0;
       switch (act.which())
       {
-      case Action::NONE:
+      case vpp_msg::Action::NONE:
       {
         ROS_INFO_STREAM("Action: None received");
         break;
       }
-      case Action::RESET:
+      case vpp_msg::Action::RESET:
       {
         ROS_INFO_STREAM("Action: Reset received");
         ros::Time reset_start_time = ros::Time::now();
@@ -84,12 +84,12 @@ int main(int argc, char **argv)
         ROS_INFO_STREAM("Reset took " << reset_time << "s");
         break;
       }
-      case Action::DIRECTION:
+      case vpp_msg::Action::DIRECTION:
       {
         ROS_INFO_STREAM("Action: Direction received");
         break;
       }
-      case Action::GOAL_POSE:
+      case vpp_msg::Action::GOAL_POSE:
       {
         geometry_msgs::Pose pose = fromActionMsg(act.getGoalPose());
         ROS_INFO_STREAM("Action: GoalPose received - " << pose);
@@ -99,7 +99,7 @@ int main(int argc, char **argv)
         ROS_INFO_STREAM("Moving took " << planning_time << "s");
         break;
       }
-      case Action::RELATIVE_POSE:
+      case vpp_msg::Action::RELATIVE_POSE:
       {
         geometry_msgs::Pose pose = fromActionMsg(act.getRelativePose());
         ROS_INFO_STREAM("Action: RelativePose received - " << pose);
@@ -116,7 +116,7 @@ int main(int argc, char **argv)
       octomap::pose6d cur_pose = octomap_vpp::transformToOctomath(cur_tf.transform);
 
       capnp::MallocMessageBuilder builder;
-      Observation::Builder obs = builder.initRoot<Observation>();
+      vpp_msg::Observation::Builder obs = builder.initRoot<vpp_msg::Observation>();
 
       ros::Time obs_comp_start_time = ros::Time::now();
 

@@ -1,6 +1,7 @@
 #include "octree_manager.h"
 #include <octomap_msgs/conversions.h>
-#include "boost/date_time/posix_time/posix_time.hpp"
+#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/range/counting_range.hpp>
 
 OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame, double tree_resolution) :
   tfBuffer(tfBuffer), planningTree(new octomap_vpp::RoiOcTree(tree_resolution)), map_frame(map_frame), old_rois(0)
@@ -115,7 +116,7 @@ void OctreeManager::publishMap()
   }
 }
 
-void OctreeManager::fillObservation(Observation::Builder &obs, const octomap::pose6d &viewpoint, size_t theta_steps, size_t phi_steps, size_t layers, double range)
+void OctreeManager::fillObservation(vpp_msg::Observation::Builder &obs, const octomap::pose6d &viewpoint, size_t theta_steps, size_t phi_steps, size_t layers, double range)
 {
   size_t list_size = theta_steps * phi_steps * layers;
   capnp::List<uint32_t>::Builder unknownCount = obs.initUnknownCount(list_size);
@@ -126,17 +127,20 @@ void OctreeManager::fillObservation(Observation::Builder &obs, const octomap::po
   double layer_range = range / layers;
 
   tree_mtx.lock();
-  for (size_t t = 0; t < theta_steps; t++)
+  auto it1 = boost::counting_range<size_t>(0, theta_steps);
+  std::for_each(it1.begin(), it1.end(), [&](size_t t)
   {
     double theta = t*M_PI / theta_steps;
-    for(size_t p = 0; p < phi_steps; p++)
+    auto it2 = boost::counting_range<size_t>(0, phi_steps);
+    std::for_each(it2.begin(), it2.end(), [&](size_t p)
     {
       double phi = -M_PI + 2*p*M_PI / phi_steps;
       double x = cos(phi) * sin(theta);
       double y = sin(phi) * sin(theta);
       double z = cos(theta);
       octomap::point3d dir(x, y, z);
-      for (size_t layer = 0; layer < layers; layer++)
+      auto it3 = boost::counting_range<size_t>(0, layers);
+      std::for_each(it3.begin(), it3.end(), [&](size_t layer)
       {
         size_t flat_index = layer * phi_steps * theta_steps + t * phi_steps + p;
         octomap::point3d start = viewpoint.transform(viewpoint.trans() + dir * (layer * layer_range));
@@ -164,9 +168,20 @@ void OctreeManager::fillObservation(Observation::Builder &obs, const octomap::po
         freeCount.set(flat_index, fc);
         occupiedCount.set(flat_index, oc);
         roiCount.set(flat_index, rc);
+      });
+    });
+  });
+  /*for (size_t t = 0; t < theta_steps; t++)
+  {
+
+    for(size_t p = 0; p < phi_steps; p++)
+    {
+      for (size_t layer = 0; layer < layers; layer++)
+      {
+
       }
     }
-  }
+  }*/
   tree_mtx.unlock();
 }
 

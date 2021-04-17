@@ -35,7 +35,7 @@ public:
 
   void publishMap();
 
-  void fillObservation(Observation::Builder &obs, const octomap::pose6d &viewpoint, size_t theta_steps, size_t phi_steps, size_t layers, double range);
+  void fillObservation(vpp_msg::Observation::Builder &obs, const octomap::pose6d &viewpoint, size_t theta_steps, size_t phi_steps, size_t layers, double range);
 
   uint32_t getReward();
 };

@@ -130,7 +130,7 @@ catkin_package(
 
 ## CapnProto generation
 set(CAPNPC_OUTPUT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
-capnp_generate_cpp(CAPNP_SRCS CAPNP_HDRS capnp/action.capnp capnp/observation.capnp)
+capnp_generate_cpp(CAPNP_SRCS CAPNP_HDRS capnp/action.capnp capnp/observation.capnp capnp/pose.capnp)
 
 #message(SEND_ERROR ${CAPNP_SRCS})
 

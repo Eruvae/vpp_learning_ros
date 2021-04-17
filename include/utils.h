@@ -1,11 +1,11 @@
 #ifndef UTILS_H
 #define UTILS_H
 
-#include "action.capnp.h"
+#include "pose.capnp.h"
 #include "geometry_msgs/Transform.h"
 #include "geometry_msgs/Pose.h"
 
-geometry_msgs::Point fromActionMsg(const Point::Reader &point_msg)
+geometry_msgs::Point fromActionMsg(const vpp_msg::Point::Reader &point_msg)
 {
   geometry_msgs::Point point;
   point.x = point_msg.getX();
@@ -14,7 +14,7 @@ geometry_msgs::Point fromActionMsg(const Point::Reader &point_msg)
   return point;
 }
 
-geometry_msgs::Quaternion fromActionMsg(const Quaternion::Reader &quat_msg)
+geometry_msgs::Quaternion fromActionMsg(const vpp_msg::Quaternion::Reader &quat_msg)
 {
   geometry_msgs::Quaternion quat;
   quat.x = quat_msg.getX();
@@ -24,7 +24,7 @@ geometry_msgs::Quaternion fromActionMsg(const Quaternion::Reader &quat_msg)
   return quat;
 }
 
-geometry_msgs::Pose fromActionMsg(const Pose::Reader &pose_msg)
+geometry_msgs::Pose fromActionMsg(const vpp_msg::Pose::Reader &pose_msg)
 {
   geometry_msgs::Pose pose;
   pose.position = fromActionMsg(pose_msg.getPosition());
