@@ -26,6 +26,8 @@ find_package(CapnProto REQUIRED)
 
 find_package(ZeroMQ QUIET)
 
+find_package(TBB REQUIRED)
+
 # libzmq autotools install: fallback to pkg-config
 if(NOT ZeroMQ_FOUND)
     list (APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR})
@@ -175,7 +177,7 @@ add_dependencies(vpp_env_server_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catki
 # target_link_libraries(${PROJECT_NAME}_node
 #   ${catkin_LIBRARIES}
 # )
-target_link_libraries(vpp_env_server_node ${catkin_LIBRARIES} ${OCTOMAP_LIBRARIES} ${ZeroMQ_LIBRARY} ${CAPNP_LIBRARIES})
+target_link_libraries(vpp_env_server_node ${catkin_LIBRARIES} ${OCTOMAP_LIBRARIES} ${ZeroMQ_LIBRARY} ${CAPNP_LIBRARIES} tbb)
 
 #############
 ## Install ##

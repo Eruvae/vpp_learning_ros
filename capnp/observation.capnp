@@ -19,5 +19,5 @@ struct Observation {
   planningTime @8 :Float64;
 
   robotPose @9 :Pose;
-  robotJoints @10 :List(Float32);
+  robotJoints @10 :List(Float64);
 }

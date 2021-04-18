@@ -20,11 +20,18 @@ class EnvironmentClient:
         freeCount = np.reshape(np.array(obs_msg.freeCount), shape)
         occupiedCount = np.reshape(np.array(obs_msg.occupiedCount), shape)
         roiCount = np.reshape(np.array(obs_msg.roiCount), shape)
+
+        robotPose = self.poseToNumpyArray(obs_msg.robotPose)
+        robotJoints = np.array(obs_msg.robotJoints)
+
         if obs_msg.planningTime > 0:
             reward = obs_msg.foundRois / obs_msg.planningTime
         else:
             reward = 0
-        return unknownCount, freeCount, occupiedCount, roiCount, reward
+        return unknownCount, freeCount, occupiedCount, roiCount, robotPose, robotJoints, reward
+
+    def poseToNumpyArray(self, pose):
+        return np.array([pose.position.x, pose.position.y, pose.position.z, pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w])
 
     def encodeGoalPose(self, action_msg, data):
         action_msg.init("goalPose")
@@ -72,7 +79,7 @@ class EnvironmentClient:
 
 def main(args):
     client = EnvironmentClient()
-    unknownCount, freeCount, occupiedCount, roiCount, reward = client.sendRelativePose([0.1, 0, 0, 0, 0, 0, 1])
+    unknownCount, freeCount, occupiedCount, roiCount, robotPose, robotJoints, reward = client.sendRelativePose([0.1, 0, 0, 0, 0, 0, 1])
     print("unknownCount")
     print(unknownCount)
     print("freeCount")
@@ -81,6 +88,10 @@ def main(args):
     print(occupiedCount)
     print("roiCount")
     print(roiCount)
+    print("robotPose")
+    print(robotPose)
+    print("robotJoints")
+    print(robotJoints)
     print("Reward", reward)
 
 if __name__ == '__main__':

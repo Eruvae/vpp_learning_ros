@@ -129,6 +129,15 @@ int main(int argc, char **argv)
       obs.setHeight(HEIGHT);
       obs.setLayers(LAYERS);
 
+      vpp_msg::Pose::Builder pose_msg = obs.initRobotPose();
+      toActionMsg(pose_msg, cur_tf.transform);
+
+      //ROS_INFO_STREAM("Current pose: " << cur_tf.transform);
+
+      std::vector<double> cur_joints = controller.getCurrentJointValues();
+      kj::ArrayPtr<const double> cur_joints_arr(cur_joints.data(), cur_joints.size());
+      obs.setRobotJoints(cur_joints_arr);
+
       double obs_comp_time = (ros::Time::now() - obs_comp_start_time).toSec();
       ROS_INFO_STREAM("Computing observation took " << obs_comp_time << "s");
 

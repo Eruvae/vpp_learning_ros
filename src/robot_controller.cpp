@@ -60,6 +60,11 @@ bool RobotController::getCurrentTransform(geometry_msgs::TransformStamped &cur_t
   return true;
 }
 
+std::vector<double> RobotController::getCurrentJointValues()
+{
+  return manipulator_group.getCurrentJointValues();
+}
+
 bool RobotController::reset()
 {
   if (start_values_set)

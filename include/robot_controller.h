@@ -31,6 +31,7 @@ public:
                   const std::string& group_name = "manipulator", const std::string &ee_link_name = "camera_link");
 
   bool getCurrentTransform(geometry_msgs::TransformStamped &cur_tf);
+  std::vector<double> getCurrentJointValues();
   bool reset();
   bool moveToPose(const geometry_msgs::Pose &goal_pose, bool async=false);
   bool moveToPoseRelative(const geometry_msgs::Pose &relative_pose, bool async=false);

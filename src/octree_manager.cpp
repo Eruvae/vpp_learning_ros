@@ -2,6 +2,9 @@
 #include <octomap_msgs/conversions.h>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/range/counting_range.hpp>
+#include <execution>
+
+#define OBSFILL_USE_PARALLEL_LOOP
 
 OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame, double tree_resolution) :
   tfBuffer(tfBuffer), planningTree(new octomap_vpp::RoiOcTree(tree_resolution)), map_frame(map_frame), old_rois(0)
@@ -128,11 +131,17 @@ void OctreeManager::fillObservation(vpp_msg::Observation::Builder &obs, const oc
 
   tree_mtx.lock();
   auto it1 = boost::counting_range<size_t>(0, theta_steps);
-  std::for_each(it1.begin(), it1.end(), [&](size_t t)
+  #ifdef OBSFILL_USE_PARALLEL_LOOP
+  auto loop_policy = std::execution::par;
+  #else
+  auto loop_policy = std::execution::seq;
+  #endif
+
+  std::for_each(loop_policy, it1.begin(), it1.end(), [&](size_t t)
   {
     double theta = t*M_PI / theta_steps;
     auto it2 = boost::counting_range<size_t>(0, phi_steps);
-    std::for_each(it2.begin(), it2.end(), [&](size_t p)
+    std::for_each(loop_policy, it2.begin(), it2.end(), [&](size_t p)
     {
       double phi = -M_PI + 2*p*M_PI / phi_steps;
       double x = cos(phi) * sin(theta);
@@ -140,7 +149,7 @@ void OctreeManager::fillObservation(vpp_msg::Observation::Builder &obs, const oc
       double z = cos(theta);
       octomap::point3d dir(x, y, z);
       auto it3 = boost::counting_range<size_t>(0, layers);
-      std::for_each(it3.begin(), it3.end(), [&](size_t layer)
+      std::for_each(loop_policy, it3.begin(), it3.end(), [&](size_t layer)
       {
         size_t flat_index = layer * phi_steps * theta_steps + t * phi_steps + p;
         octomap::point3d start = viewpoint.transform(viewpoint.trans() + dir * (layer * layer_range));
