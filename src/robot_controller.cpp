@@ -108,7 +108,19 @@ bool RobotController::moveToState(const robot_state::RobotState &goal_state, boo
 bool RobotController::moveToState(const std::vector<double> &joint_values, bool async)
 {
   kinematic_state->setJointGroupPositions(joint_model_group, joint_values);
+  kinematic_state->enforceBounds();
   manipulator_group.setJointValueTarget(*kinematic_state);
 
   return planAndExecute(async);
+}
+
+bool RobotController::moveToStateRelative(const std::vector<double> &relative_joint_values, bool async)
+{
+  std::vector<double> joint_values = manipulator_group.getCurrentJointValues();
+  size_t joint_num = std::min(joint_values.size(), relative_joint_values.size());
+  for (size_t i=0; i < joint_num; i++)
+  {
+    joint_values[i] += relative_joint_values[i];
+  }
+  return moveToState(joint_values, async);
 }

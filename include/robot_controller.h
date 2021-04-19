@@ -37,6 +37,7 @@ public:
   bool moveToPoseRelative(const geometry_msgs::Pose &relative_pose, bool async=false);
   bool moveToState(const robot_state::RobotState &goal_state, bool async=false);
   bool moveToState(const std::vector<double> &joint_values, bool async=false);
+  bool moveToStateRelative(const std::vector<double> &relative_joint_values, bool async=false);
 };
 
 #endif // ROBOT_CONTROLLER_H

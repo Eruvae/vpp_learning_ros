@@ -5,28 +5,13 @@ $Cxx.namespace("vpp_msg");
 
 using import "pose.capnp".Pose;
 
-enum Direction {
-  doNothing @0;
-  moveForward @1;
-  moveBackward @2;
-  moveLeft @3;
-  moveRight @4;
-  moveUp @5;
-  moveDown @6;
-  rotateRollP @7;
-  rotateRollN @8;
-  rotatePitchP @9;
-  rotatePitchN @10;
-  rotateYawP @11;
-  rotateYawN @12;
-}
-
 struct Action {
   union {
     none @0 :Void;
     reset @1 :Void;
-    direction @2 :Direction;
-    goalPose @3 :Pose;
-    relativePose @4 :Pose;
+    relativeJointTarget @2 :List(Float64);
+    absoluteJointTarget @3 :List(Float64);
+    goalPose @4 :Pose;
+    relativePose @5 :Pose;
   }
 }

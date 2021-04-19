@@ -61,6 +61,16 @@ class EnvironmentClient:
         obs_msg = observation_capnp.Observation.from_bytes(message)
         return self.decodeObservation(obs_msg)
 
+    def sendRelativeJointTarget(self, joint_values):
+        action_msg = action_capnp.Action.new_message()
+        action_msg.relativeJointTarget = joint_values
+        return self.sendAction(action_msg)
+
+    def sendAbsoluteJointTarget(self, joint_values):
+        action_msg = action_capnp.Action.new_message()
+        action_msg.absoluteJointTarget = joint_values
+        return self.sendAction(action_msg)
+
     def sendGoalPose(self, goal_pose):
         action_msg = action_capnp.Action.new_message()
         self.encodeGoalPose(action_msg, goal_pose)
@@ -79,7 +89,7 @@ class EnvironmentClient:
 
 def main(args):
     client = EnvironmentClient()
-    unknownCount, freeCount, occupiedCount, roiCount, robotPose, robotJoints, reward = client.sendRelativePose([0.1, 0, 0, 0, 0, 0, 1])
+    unknownCount, freeCount, occupiedCount, roiCount, robotPose, robotJoints, reward = client.sendRelativeJointTarget([-0.1, 0, 0, 0, 0, 0]) # client.sendRelativePose([0.1, 0, 0, 0, 0, 0, 1])
     print("unknownCount")
     print(unknownCount)
     print("freeCount")

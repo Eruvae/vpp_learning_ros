@@ -1,9 +1,23 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#include <capnp/list.h>
+#include <vector>
 #include "pose.capnp.h"
 #include "geometry_msgs/Transform.h"
 #include "geometry_msgs/Pose.h"
+
+template<typename T, capnp::Kind K>
+std::vector<T> capnpListToVector(const typename capnp::List<T, K>::Reader &list)
+{
+  std::vector<T> vec;
+  vec.reserve(list.size());
+  for (const T &el : list)
+  {
+    vec.push_back(el);
+  }
+  return vec;
+}
 
 geometry_msgs::Point fromActionMsg(const vpp_msg::Point::Reader &point_msg)
 {

@@ -84,9 +84,24 @@ int main(int argc, char **argv)
         ROS_INFO_STREAM("Reset took " << reset_time << "s");
         break;
       }
-      case vpp_msg::Action::DIRECTION:
+      case vpp_msg::Action::RELATIVE_JOINT_TARGET:
       {
-        ROS_INFO_STREAM("Action: Direction received");
+        ROS_INFO_STREAM("Action: Relative joint target received");
+        ros::Time planning_start = ros::Time::now();
+        std::vector<double> relative_joint_values = capnpListToVector<double, capnp::Kind::PRIMITIVE>(act.getRelativeJointTarget());
+        bool success = controller.moveToStateRelative(relative_joint_values);
+        planning_time = (ros::Time::now() - planning_start).toSec();
+        ROS_INFO_STREAM("Moving took " << planning_time << "s");
+        break;
+      }
+      case vpp_msg::Action::ABSOLUTE_JOINT_TARGET:
+      {
+        ROS_INFO_STREAM("Action: Absolute joint target received");
+        ros::Time planning_start = ros::Time::now();
+        std::vector<double> joint_values = capnpListToVector<double, capnp::Kind::PRIMITIVE>(act.getAbsoluteJointTarget());
+        bool success = controller.moveToState(joint_values);
+        planning_time = (ros::Time::now() - planning_start).toSec();
+        ROS_INFO_STREAM("Moving took " << planning_time << "s");
         break;
       }
       case vpp_msg::Action::GOAL_POSE:
@@ -123,7 +138,7 @@ int main(int argc, char **argv)
       const size_t WIDTH = 36;
       const size_t HEIGHT = 18;
       const size_t LAYERS = 5;
-      const double RANGE = 5.0;
+      const double RANGE = 2.0;
       oc_manager.fillObservation(obs, cur_pose, WIDTH, HEIGHT, LAYERS, RANGE);
       obs.setWidth(WIDTH);
       obs.setHeight(HEIGHT);
