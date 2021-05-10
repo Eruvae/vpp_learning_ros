@@ -38,11 +38,11 @@ bool RobotController::planAndExecute(bool async)
   else
     res = manipulator_group.execute(plan);
 
-  if (res != MoveItErrorCode::SUCCESS)
+  /*if (res != MoveItErrorCode::SUCCESS)
   {
     ROS_INFO("Could not execute plan");
     return false;
-  }
+  }*/
   return true;
 }
 
