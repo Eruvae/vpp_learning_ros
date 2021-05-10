@@ -43,10 +43,16 @@ int main(int argc, char **argv)
   std::string map_frame = nh.param<std::string>("/roi_viewpoint_planner/map_frame", "world");
   std::string ws_frame = nh.param<std::string>("/roi_viewpoint_planner/ws_frame", "arm_base_link");
 
+  std::string world_name;
+  if (!nh.param<std::string>("/world_name", world_name, ""))
+  {
+    ROS_WARN("World name not specified, cannot load ground truth");
+  }
+
   tf2_ros::Buffer tfBuffer(ros::Duration(30));
   tf2_ros::TransformListener tfListener(tfBuffer);
 
-  OctreeManager oc_manager(nh, tfBuffer, map_frame, tree_resolution);
+  OctreeManager oc_manager(nh, tfBuffer, map_frame, tree_resolution, world_name);
   RobotController controller(nh, tfBuffer, map_frame);
   controller.reset();
   oc_manager.resetOctomap();
@@ -159,9 +165,10 @@ int main(int argc, char **argv)
       ros::Time reward_comp_start_time = ros::Time::now();
       uint32_t reward = 0;
       if (act.isGoalPose() || act.isRelativePose())
-        reward = oc_manager.getReward();
+        reward = oc_manager.getRewardWithGt();
 
       obs.setFoundRois(reward);
+      obs.setTotalRoiCells(oc_manager.getMaxGtReward());
       obs.setPlanningTime(planning_time);
 
       double reward_comp_time = (ros::Time::now() - reward_comp_start_time).toSec();

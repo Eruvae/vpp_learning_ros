@@ -28,6 +28,9 @@ find_package(ZeroMQ QUIET)
 
 find_package(TBB REQUIRED)
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(YAMLCPP yaml-cpp REQUIRED)
+
 # libzmq autotools install: fallback to pkg-config
 if(NOT ZeroMQ_FOUND)
     list (APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR})
@@ -144,6 +147,7 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${OCTOMAP_INCLUDE_DIRS}
   ${CAPNP_INCLUDE_DIRS}
+  ${YAMLCPP_INCLUDE_DIRS}
 )
 
 ## Declare a C++ library
@@ -160,7 +164,7 @@ include_directories(
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 # add_executable(${PROJECT_NAME}_node src/octomap_vpp_node.cpp)
-add_executable(vpp_env_server_node src/vpp_env_server_node.cpp src/octree_manager.cpp src/robot_controller.cpp ${CAPNP_SRCS})
+add_executable(vpp_env_server_node src/vpp_env_server_node.cpp src/octree_manager.cpp src/robot_controller.cpp src/gt_octree_loader.cpp ${CAPNP_SRCS})
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -177,7 +181,7 @@ add_dependencies(vpp_env_server_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catki
 # target_link_libraries(${PROJECT_NAME}_node
 #   ${catkin_LIBRARIES}
 # )
-target_link_libraries(vpp_env_server_node ${catkin_LIBRARIES} ${OCTOMAP_LIBRARIES} ${ZeroMQ_LIBRARY} ${CAPNP_LIBRARIES} tbb)
+target_link_libraries(vpp_env_server_node ${catkin_LIBRARIES} ${OCTOMAP_LIBRARIES} ${ZeroMQ_LIBRARY} ${CAPNP_LIBRARIES} ${YAMLCPP_LIBRARIES} tbb)
 
 #############
 ## Install ##

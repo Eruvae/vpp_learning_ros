@@ -28,6 +28,7 @@ class EnvironmentClient:
             reward = obs_msg.foundRois / obs_msg.planningTime
         else:
             reward = 0
+
         return unknownCount, freeCount, occupiedCount, roiCount, robotPose, robotJoints, reward
 
     def poseToNumpyArray(self, pose):

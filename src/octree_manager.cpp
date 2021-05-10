@@ -6,8 +6,8 @@
 
 #define OBSFILL_USE_PARALLEL_LOOP
 
-OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame, double tree_resolution) :
-  tfBuffer(tfBuffer), planningTree(new octomap_vpp::RoiOcTree(tree_resolution)), map_frame(map_frame), old_rois(0)
+OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame, double tree_resolution, const std::string &world_name) :
+  tfBuffer(tfBuffer), planningTree(new octomap_vpp::RoiOcTree(tree_resolution)), map_frame(map_frame), old_rois(0), gtLoader(world_name, tree_resolution)
 {
   octomapPub = nh.advertise<octomap_msgs::Octomap>("octomap", 1);
   roiSub = nh.subscribe("/detect_roi/results", 1, &OctreeManager::registerPointcloudWithRoi, this);
@@ -102,6 +102,7 @@ void OctreeManager::resetOctomap()
   planningTree->clearRoiKeys();
   old_rois = 0;
   tree_mtx.unlock();
+  encountered_keys.clear();
   publishMap();
 }
 
@@ -206,4 +207,31 @@ uint32_t OctreeManager::getReward()
 
   old_rois = num_rois;
   return reward;
+}
+
+uint32_t OctreeManager::getRewardWithGt()
+{
+  tree_mtx.lock();
+  octomap::KeySet roi_keys = planningTree->getRoiKeys();
+  tree_mtx.unlock();
+
+  uint32_t reward = 0;
+  for (const octomap::OcTreeKey &key : roi_keys)
+  {
+    if (encountered_keys.find(key) != encountered_keys.end())
+      continue; // Key already encountered
+    else if (gtLoader.getFruitIndex(key) == 0)
+      continue; // Key not in GT
+    else
+    {
+      encountered_keys.insert(key);
+      reward++;
+    }
+  }
+  return reward;
+}
+
+uint32_t OctreeManager::getMaxGtReward()
+{
+  return gtLoader.getTotalFruitCellCount();
 }
