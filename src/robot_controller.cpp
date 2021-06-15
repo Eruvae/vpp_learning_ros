@@ -1,5 +1,6 @@
 #include "robot_controller.h"
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <roi_viewpoint_planner/rvp_utils.h>
 
 RobotController::RobotController(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &pose_reference_frame, const std::string& group_name, const std::string &ee_link_name)
   : tfBuffer(tfBuffer),
@@ -21,7 +22,7 @@ RobotController::RobotController(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer,
   }
 }
 
-bool RobotController::planAndExecute(bool async)
+bool RobotController::planAndExecute(bool async, double *plan_length, double *traj_duration)
 {
   MoveGroupInterface::Plan plan;
   ros::Time planStartTime = ros::Time::now();
@@ -37,6 +38,12 @@ bool RobotController::planAndExecute(bool async)
     res = manipulator_group.asyncExecute(plan);
   else
     res = manipulator_group.execute(plan);
+
+  if (plan_length)
+    *plan_length = roi_viewpoint_planner::computeTrajectoryLength(plan);
+
+  if (traj_duration)
+    *traj_duration = roi_viewpoint_planner::getTrajectoryDuration(plan);
 
   /*if (res != MoveItErrorCode::SUCCESS)
   {
@@ -73,7 +80,7 @@ bool RobotController::reset()
   return true;
 }
 
-bool RobotController::moveToPose(const geometry_msgs::Pose &goal_pose, bool async)
+bool RobotController::moveToPose(const geometry_msgs::Pose &goal_pose, bool async, double *plan_length, double *traj_duration)
 {
   ros::Time setTargetTime = ros::Time::now();
   if (!manipulator_group.setJointValueTarget(goal_pose, end_effector_link))
@@ -83,10 +90,10 @@ bool RobotController::moveToPose(const geometry_msgs::Pose &goal_pose, bool asyn
   }
   ROS_INFO_STREAM("IK solve time: " << (ros::Time::now() - setTargetTime));
 
-  return planAndExecute(async);
+  return planAndExecute(async, plan_length, traj_duration);
 }
 
-bool RobotController::moveToPoseRelative(const geometry_msgs::Pose &relative_pose, bool async)
+bool RobotController::moveToPoseRelative(const geometry_msgs::Pose &relative_pose, bool async, double *plan_length, double *traj_duration)
 {
   geometry_msgs::TransformStamped cur_tf;
   bool success = getCurrentTransform(cur_tf);
@@ -95,26 +102,26 @@ bool RobotController::moveToPoseRelative(const geometry_msgs::Pose &relative_pos
 
   geometry_msgs::Pose goal_pose;
   tf2::doTransform(relative_pose, goal_pose, cur_tf);
-  return moveToPose(goal_pose, async);
+  return moveToPose(goal_pose, async, plan_length, traj_duration);
 }
 
-bool RobotController::moveToState(const robot_state::RobotState &goal_state, bool async)
+bool RobotController::moveToState(const robot_state::RobotState &goal_state, bool async, double *plan_length, double *traj_duration)
 {
   manipulator_group.setJointValueTarget(goal_state);
 
-  return planAndExecute(async);
+  return planAndExecute(async, plan_length, traj_duration);
 }
 
-bool RobotController::moveToState(const std::vector<double> &joint_values, bool async)
+bool RobotController::moveToState(const std::vector<double> &joint_values, bool async, double *plan_length, double *traj_duration)
 {
   kinematic_state->setJointGroupPositions(joint_model_group, joint_values);
   kinematic_state->enforceBounds();
   manipulator_group.setJointValueTarget(*kinematic_state);
 
-  return planAndExecute(async);
+  return planAndExecute(async, plan_length, traj_duration);
 }
 
-bool RobotController::moveToStateRelative(const std::vector<double> &relative_joint_values, bool async)
+bool RobotController::moveToStateRelative(const std::vector<double> &relative_joint_values, bool async, double *plan_length, double *traj_duration)
 {
   std::vector<double> joint_values = manipulator_group.getCurrentJointValues();
   size_t joint_num = std::min(joint_values.size(), relative_joint_values.size());
@@ -122,5 +129,5 @@ bool RobotController::moveToStateRelative(const std::vector<double> &relative_jo
   {
     joint_values[i] += relative_joint_values[i];
   }
-  return moveToState(joint_values, async);
+  return moveToState(joint_values, async, plan_length, traj_duration);
 }

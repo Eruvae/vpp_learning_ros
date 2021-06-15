@@ -11,6 +11,7 @@ set (CATKIN_DEPENDENCIES
     octomap_vpp
     moveit_ros_planning_interface
     pointcloud_roi_msgs
+    roi_viewpoint_planner
 )
 
 ## Find catkin macros and libraries

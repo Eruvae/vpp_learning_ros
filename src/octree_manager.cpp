@@ -3,14 +3,24 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/range/counting_range.hpp>
 #include <execution>
+#include <roi_viewpoint_planner/planner_interfaces/provided_tree_interface.h>
 
 #define OBSFILL_USE_PARALLEL_LOOP
 
-OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame, double tree_resolution, const std::string &world_name) :
+OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame, double tree_resolution, const std::string &world_name, bool initialize_evaluator) :
   tfBuffer(tfBuffer), planningTree(new octomap_vpp::RoiOcTree(tree_resolution)), map_frame(map_frame), old_rois(0), gtLoader(world_name, tree_resolution)
 {
   octomapPub = nh.advertise<octomap_msgs::Octomap>("octomap", 1);
   roiSub = nh.subscribe("/detect_roi/results", 1, &OctreeManager::registerPointcloudWithRoi, this);
+
+  if (initialize_evaluator)
+  {
+    ros::NodeHandle nh_eval("evaluator");
+    std::shared_ptr<roi_viewpoint_planner::ProvidedTreeInterface> interface(new roi_viewpoint_planner::ProvidedTreeInterface(planningTree, tree_mtx));
+    evaluator.reset(new roi_viewpoint_planner::Evaluator(interface, nh, nh_eval, true));
+    eval_trial_num = 0;
+    evaluator->saveGtAsColoredCloud();
+  }
 }
 
 void OctreeManager::registerPointcloudWithRoi(const ros::MessageEvent<pointcloud_roi_msgs::PointcloudWithRoi const> &event)
@@ -234,4 +244,78 @@ uint32_t OctreeManager::getRewardWithGt()
 uint32_t OctreeManager::getMaxGtReward()
 {
   return gtLoader.getTotalFruitCellCount();
+}
+
+bool OctreeManager::startEvaluator()
+{
+  eval_trial_num = 0;
+  setEvaluatorStartParams();
+  return true;
+}
+
+void OctreeManager::setEvaluatorStartParams()
+{
+  std::string file_index_str = std::to_string(eval_trial_num);
+  eval_resultsFile = std::ofstream("planner_results_" + file_index_str + ".csv");
+  eval_resultsFileOld = std::ofstream("planner_results_old" + file_index_str + ".csv");
+  eval_fruitCellPercFile = std::ofstream("results_fruit_cells_" + file_index_str + ".csv");
+  eval_volumeAccuracyFile = std::ofstream("results_volume_accuracy_" + file_index_str + ".csv");
+  eval_distanceFile = std::ofstream("results_distances_" + file_index_str + ".csv");
+  eval_resultsFile << "Time (s),Plan duration (s),Plan Length,";
+  evaluator->writeHeader(eval_resultsFile) << ",Step" << std::endl;
+  eval_resultsFileOld << "Time (s),Plan duration (s),Plan Length,";
+  evaluator->writeHeaderOld(eval_resultsFileOld) << ",Step" << std::endl;
+  eval_plannerStartTime = ros::Time::now();
+  eval_accumulatedPlanDuration = 0;
+  eval_accumulatedPlanLength = 0;
+}
+
+template<typename T>
+std::ostream& writeVector(std::ostream &os, double passed_time, const std::vector<T> &vec)
+{
+  os << passed_time << ",";
+  for (size_t i = 0; i < vec.size(); i++)
+  {
+    os << vec[i];
+    if (i < vec.size() - 1)
+      os << ",";
+  }
+  return os;
+}
+
+bool OctreeManager::saveEvaluatorData(double plan_length, double traj_duration)
+{
+  ros::Time currentTime = ros::Time::now();
+
+  double passed_time = (currentTime - eval_plannerStartTime).toSec();
+
+  eval_accumulatedPlanDuration += traj_duration;
+  eval_accumulatedPlanLength += plan_length;
+
+  roi_viewpoint_planner::EvaluationParameters res = evaluator->processDetectedRois(true, eval_trial_num, static_cast<size_t>(passed_time));
+  roi_viewpoint_planner::EvaluationParametersOld resOld = evaluator->processDetectedRoisOld();
+
+  eval_resultsFile << passed_time << "," << eval_accumulatedPlanDuration << "," << eval_accumulatedPlanLength << ",";
+  evaluator->writeParams(eval_resultsFile, res) << "," << eval_lastStep << std::endl;
+
+  eval_resultsFileOld << passed_time << "," << eval_accumulatedPlanDuration << "," << eval_accumulatedPlanLength << ",";
+  evaluator->writeParamsOld(eval_resultsFileOld, resOld) << "," << eval_lastStep << std::endl;
+
+  writeVector(eval_fruitCellPercFile, passed_time, res.fruit_cell_percentages) << std::endl;
+  writeVector(eval_volumeAccuracyFile, passed_time, res.volume_accuracies) << std::endl;
+  writeVector(eval_distanceFile, passed_time, res.distances) << std::endl;
+
+  return true;
+}
+
+bool OctreeManager::resetEvaluator()
+{
+  eval_resultsFile.close();
+  eval_resultsFileOld.close();
+  eval_fruitCellPercFile.close();
+  eval_volumeAccuracyFile.close();
+  eval_distanceFile.close();
+  eval_trial_num++;
+  setEvaluatorStartParams();
+  return true;
 }

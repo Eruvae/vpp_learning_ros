@@ -24,7 +24,7 @@ private:
   std::vector<double> joint_start_values;
   bool start_values_set;
 
-  bool planAndExecute(bool async);
+  bool planAndExecute(bool async, double *plan_length=nullptr, double *traj_duration=nullptr);
 
 public:
   RobotController(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &pose_reference_frame = "world",
@@ -33,11 +33,11 @@ public:
   bool getCurrentTransform(geometry_msgs::TransformStamped &cur_tf);
   std::vector<double> getCurrentJointValues();
   bool reset();
-  bool moveToPose(const geometry_msgs::Pose &goal_pose, bool async=false);
-  bool moveToPoseRelative(const geometry_msgs::Pose &relative_pose, bool async=false);
-  bool moveToState(const robot_state::RobotState &goal_state, bool async=false);
-  bool moveToState(const std::vector<double> &joint_values, bool async=false);
-  bool moveToStateRelative(const std::vector<double> &relative_joint_values, bool async=false);
+  bool moveToPose(const geometry_msgs::Pose &goal_pose, bool async=false, double *plan_length=nullptr, double *traj_duration=nullptr);
+  bool moveToPoseRelative(const geometry_msgs::Pose &relative_pose, bool async=false, double *plan_length=nullptr, double *traj_duration=nullptr);
+  bool moveToState(const robot_state::RobotState &goal_state, bool async=false, double *plan_length=nullptr, double *traj_duration=nullptr);
+  bool moveToState(const std::vector<double> &joint_values, bool async=false, double *plan_length=nullptr, double *traj_duration=nullptr);
+  bool moveToStateRelative(const std::vector<double> &relative_joint_values, bool async=false, double *plan_length=nullptr, double *traj_duration=nullptr);
 };
 
 #endif // ROBOT_CONTROLLER_H

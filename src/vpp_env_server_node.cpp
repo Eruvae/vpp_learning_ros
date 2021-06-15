@@ -25,7 +25,7 @@ int main(int argc, char **argv)
 {
   ros::init(argc, argv, "vpp_env_server_node");
   ros::NodeHandle nh;
-  //ros::NodeHandle nhp("~");
+  ros::NodeHandle nhp("~");
   ros::AsyncSpinner spinner(4);
   spinner.start();
 
@@ -43,6 +43,8 @@ int main(int argc, char **argv)
   std::string map_frame = nh.param<std::string>("/roi_viewpoint_planner/map_frame", "world");
   std::string ws_frame = nh.param<std::string>("/roi_viewpoint_planner/ws_frame", "arm_base_link");
 
+  bool evaluate_results = nhp.param<bool>("evaluate_results", false);
+
   std::string world_name;
   if (!nh.param<std::string>("/world_name", world_name, ""))
   {
@@ -52,10 +54,16 @@ int main(int argc, char **argv)
   tf2_ros::Buffer tfBuffer(ros::Duration(30));
   tf2_ros::TransformListener tfListener(tfBuffer);
 
-  OctreeManager oc_manager(nh, tfBuffer, map_frame, tree_resolution, world_name);
+  OctreeManager oc_manager(nh, tfBuffer, map_frame, tree_resolution, world_name, evaluate_results);
   RobotController controller(nh, tfBuffer, map_frame);
   controller.reset();
   oc_manager.resetOctomap();
+
+  if (evaluate_results)
+  {
+    ROS_INFO_STREAM("Starting evaluator");
+    oc_manager.startEvaluator();
+  }
 
   while(ros::ok())
   {
@@ -87,6 +95,10 @@ int main(int argc, char **argv)
         bool success = controller.reset();
         double reset_time = (ros::Time::now() - reset_start_time).toSec();
         oc_manager.resetOctomap();
+
+        if (evaluate_results)
+          oc_manager.resetEvaluator();
+
         ROS_INFO_STREAM("Reset took " << reset_time << "s");
         break;
       }
@@ -95,7 +107,11 @@ int main(int argc, char **argv)
         ROS_INFO_STREAM("Action: Relative joint target received");
         ros::Time planning_start = ros::Time::now();
         std::vector<double> relative_joint_values = capnpListToVector<double, capnp::Kind::PRIMITIVE>(act.getRelativeJointTarget());
-        bool success = controller.moveToStateRelative(relative_joint_values);
+        double plan_length = 0, traj_duration = 0;
+        bool success = controller.moveToStateRelative(relative_joint_values, false, &plan_length, &traj_duration);
+        if (evaluate_results)
+          oc_manager.saveEvaluatorData(plan_length, traj_duration);
+
         planning_time = (ros::Time::now() - planning_start).toSec();
         ROS_INFO_STREAM("Moving took " << planning_time << "s");
         break;
@@ -105,7 +121,11 @@ int main(int argc, char **argv)
         ROS_INFO_STREAM("Action: Absolute joint target received");
         ros::Time planning_start = ros::Time::now();
         std::vector<double> joint_values = capnpListToVector<double, capnp::Kind::PRIMITIVE>(act.getAbsoluteJointTarget());
-        bool success = controller.moveToState(joint_values);
+        double plan_length = 0, traj_duration = 0;
+        bool success = controller.moveToState(joint_values, false, &plan_length, &traj_duration);
+        if (evaluate_results)
+          oc_manager.saveEvaluatorData(plan_length, traj_duration);
+
         planning_time = (ros::Time::now() - planning_start).toSec();
         ROS_INFO_STREAM("Moving took " << planning_time << "s");
         break;
@@ -115,7 +135,11 @@ int main(int argc, char **argv)
         geometry_msgs::Pose pose = fromActionMsg(act.getGoalPose());
         ROS_INFO_STREAM("Action: GoalPose received - " << pose);
         ros::Time planning_start = ros::Time::now();
-        bool success = controller.moveToPose(pose);
+        double plan_length = 0, traj_duration = 0;
+        bool success = controller.moveToPose(pose, false, &plan_length, &traj_duration);
+        if (evaluate_results)
+          oc_manager.saveEvaluatorData(plan_length, traj_duration);
+
         planning_time = (ros::Time::now() - planning_start).toSec();
         ROS_INFO_STREAM("Moving took " << planning_time << "s");
         break;
@@ -125,7 +149,11 @@ int main(int argc, char **argv)
         geometry_msgs::Pose pose = fromActionMsg(act.getRelativePose());
         ROS_INFO_STREAM("Action: RelativePose received - " << pose);
         ros::Time planning_start = ros::Time::now();
-        bool success = controller.moveToPoseRelative(pose);
+        double plan_length = 0, traj_duration = 0;
+        bool success = controller.moveToPoseRelative(pose, false, &plan_length, &traj_duration);
+        if (evaluate_results)
+          oc_manager.saveEvaluatorData(plan_length, traj_duration);
+
         planning_time = (ros::Time::now() - planning_start).toSec();
         ROS_INFO_STREAM("Moving took " << planning_time << "s");
         break;

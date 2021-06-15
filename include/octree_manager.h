@@ -11,12 +11,14 @@
 #include "octomap_vpp/roioctree_utils.h"
 #include "observation.capnp.h"
 #include "gt_octree_loader.h"
+#include <roi_viewpoint_planner/evaluator.h>
 
 class OctreeManager
 {
 private:
   tf2_ros::Buffer &tfBuffer;
   std::shared_ptr<octomap_vpp::RoiOcTree> planningTree;
+  std::unique_ptr<roi_viewpoint_planner::Evaluator> evaluator;
   boost::mutex tree_mtx;
   const std::string map_frame;
   ros::Publisher octomapPub;
@@ -25,10 +27,22 @@ private:
   GtOctreeLoader gtLoader;
   octomap::KeySet encountered_keys;
 
+  // Evaluator variables
+  size_t eval_trial_num;
+  std::ofstream eval_resultsFile;
+  std::ofstream eval_resultsFileOld;
+  std::ofstream eval_fruitCellPercFile;
+  std::ofstream eval_volumeAccuracyFile;
+  std::ofstream eval_distanceFile;
+  ros::Time eval_plannerStartTime;
+  double eval_accumulatedPlanDuration;
+  double eval_accumulatedPlanLength;
+  std::string eval_lastStep;
+
   void registerPointcloudWithRoi(const ros::MessageEvent<pointcloud_roi_msgs::PointcloudWithRoi const> &event);
 
 public:
-  OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame, double tree_resolution, const std::string &world_name);
+  OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame, double tree_resolution, const std::string &world_name, bool initialize_evaluator=false);
 
   std::string saveOctomap(const std::string &name = "planningTree", bool name_is_prefix = true);
 
@@ -45,6 +59,11 @@ public:
   uint32_t getRewardWithGt();
 
   uint32_t getMaxGtReward();
+
+  bool startEvaluator();
+  void setEvaluatorStartParams();
+  bool saveEvaluatorData(double plan_length, double traj_duration);
+  bool resetEvaluator();
 };
 
 #endif // OCTREE_MANAGER_H
