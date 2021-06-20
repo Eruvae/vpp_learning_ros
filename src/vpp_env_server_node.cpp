@@ -45,16 +45,10 @@ int main(int argc, char **argv)
 
   bool evaluate_results = nhp.param<bool>("evaluate_results", false);
 
-  std::string world_name;
-  if (!nh.param<std::string>("/world_name", world_name, ""))
-  {
-    ROS_WARN("World name not specified, cannot load ground truth");
-  }
-
   tf2_ros::Buffer tfBuffer(ros::Duration(30));
   tf2_ros::TransformListener tfListener(tfBuffer);
 
-  OctreeManager oc_manager(nh, tfBuffer, map_frame, tree_resolution, world_name, evaluate_results);
+  OctreeManager oc_manager(nh, tfBuffer, map_frame, tree_resolution, evaluate_results);
   RobotController controller(nh, tfBuffer, map_frame);
   controller.reset();
   oc_manager.resetOctomap();

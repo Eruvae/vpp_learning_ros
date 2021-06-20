@@ -7,8 +7,8 @@
 
 #define OBSFILL_USE_PARALLEL_LOOP
 
-OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame, double tree_resolution, const std::string &world_name, bool initialize_evaluator) :
-  tfBuffer(tfBuffer), planningTree(new octomap_vpp::RoiOcTree(tree_resolution)), gtLoader(new roi_viewpoint_planner::GtOctreeLoader(world_name, tree_resolution)), evaluator(nullptr),
+OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame, double tree_resolution, bool initialize_evaluator) :
+  tfBuffer(tfBuffer), planningTree(new octomap_vpp::RoiOcTree(tree_resolution)), gtLoader(new roi_viewpoint_planner::GtOctreeLoader(tree_resolution)), evaluator(nullptr),
   map_frame(map_frame), old_rois(0)
 {
   octomapPub = nh.advertise<octomap_msgs::Octomap>("octomap", 1);
