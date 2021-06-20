@@ -8,7 +8,8 @@
 #define OBSFILL_USE_PARALLEL_LOOP
 
 OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame, double tree_resolution, const std::string &world_name, bool initialize_evaluator) :
-  tfBuffer(tfBuffer), planningTree(new octomap_vpp::RoiOcTree(tree_resolution)), map_frame(map_frame), old_rois(0), gtLoader(world_name, tree_resolution)
+  tfBuffer(tfBuffer), planningTree(new octomap_vpp::RoiOcTree(tree_resolution)), gtLoader(new roi_viewpoint_planner::GtOctreeLoader(world_name, tree_resolution)), evaluator(nullptr),
+  map_frame(map_frame), old_rois(0)
 {
   octomapPub = nh.advertise<octomap_msgs::Octomap>("octomap", 1);
   roiSub = nh.subscribe("/detect_roi/results", 1, &OctreeManager::registerPointcloudWithRoi, this);
@@ -17,7 +18,7 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, con
   {
     ros::NodeHandle nh_eval("evaluator");
     std::shared_ptr<roi_viewpoint_planner::ProvidedTreeInterface> interface(new roi_viewpoint_planner::ProvidedTreeInterface(planningTree, tree_mtx));
-    evaluator.reset(new roi_viewpoint_planner::Evaluator(interface, nh, nh_eval, true));
+    evaluator.reset(new roi_viewpoint_planner::Evaluator(interface, nh, nh_eval, true, false, gtLoader));
     eval_trial_num = 0;
     evaluator->saveGtAsColoredCloud();
   }
@@ -230,7 +231,7 @@ uint32_t OctreeManager::getRewardWithGt()
   {
     if (encountered_keys.find(key) != encountered_keys.end())
       continue; // Key already encountered
-    else if (gtLoader.getFruitIndex(key) == 0)
+    else if (gtLoader->getFruitIndex(key) == 0)
       continue; // Key not in GT
     else
     {
@@ -243,7 +244,7 @@ uint32_t OctreeManager::getRewardWithGt()
 
 uint32_t OctreeManager::getMaxGtReward()
 {
-  return gtLoader.getTotalFruitCellCount();
+  return gtLoader->getTotalFruitCellCount();
 }
 
 bool OctreeManager::startEvaluator()

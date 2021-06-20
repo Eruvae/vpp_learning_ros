@@ -10,7 +10,7 @@
 #include <octomap_msgs/Octomap.h>
 #include "octomap_vpp/roioctree_utils.h"
 #include "observation.capnp.h"
-#include "gt_octree_loader.h"
+#include <roi_viewpoint_planner/gt_octree_loader.h>
 #include <roi_viewpoint_planner/evaluator.h>
 
 class OctreeManager
@@ -18,13 +18,13 @@ class OctreeManager
 private:
   tf2_ros::Buffer &tfBuffer;
   std::shared_ptr<octomap_vpp::RoiOcTree> planningTree;
+  std::shared_ptr<roi_viewpoint_planner::GtOctreeLoader> gtLoader;
   std::unique_ptr<roi_viewpoint_planner::Evaluator> evaluator;
   boost::mutex tree_mtx;
   const std::string map_frame;
   ros::Publisher octomapPub;
   ros::Subscriber roiSub;
   size_t old_rois;
-  GtOctreeLoader gtLoader;
   octomap::KeySet encountered_keys;
 
   // Evaluator variables
