@@ -87,12 +87,12 @@ int main(int argc, char **argv)
         ROS_INFO_STREAM("Action: Reset received");
         ros::Time reset_start_time = ros::Time::now();
         bool success = controller.reset();
-        double reset_time = (ros::Time::now() - reset_start_time).toSec();
         oc_manager.resetOctomap();
 
         if (evaluate_results)
           oc_manager.resetEvaluator();
 
+        double reset_time = (ros::Time::now() - reset_start_time).toSec();
         ROS_INFO_STREAM("Reset took " << reset_time << "s");
         break;
       }
@@ -150,6 +150,26 @@ int main(int argc, char **argv)
 
         planning_time = (ros::Time::now() - planning_start).toSec();
         ROS_INFO_STREAM("Moving took " << planning_time << "s");
+        break;
+      }
+      case vpp_msg::Action::RESET_AND_RANDOMIZE:
+      {
+        ROS_INFO_STREAM("Action: Reset and randomize received");
+        ros::Time rand_reset_start_time = ros::Time::now();
+        geometry_msgs::Point min_point = fromActionMsg(act.getResetAndRandomize().getMin());
+        geometry_msgs::Point max_point = fromActionMsg(act.getResetAndRandomize().getMax());
+        double min_dist = act.getResetAndRandomize().getMinDist();
+
+        bool success = controller.reset();
+
+        oc_manager.randomizePlants(min_point, max_point, min_dist);
+        oc_manager.resetOctomap();
+
+        if (evaluate_results)
+          oc_manager.resetEvaluator();
+
+        double reset_time = (ros::Time::now() - rand_reset_start_time).toSec();
+        ROS_INFO_STREAM("Reset and randomize took " << reset_time << "s");
         break;
       }
       }

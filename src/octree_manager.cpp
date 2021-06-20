@@ -117,6 +117,14 @@ void OctreeManager::resetOctomap()
   publishMap();
 }
 
+void OctreeManager::randomizePlants(const geometry_msgs::Point &min, const geometry_msgs::Point &max, double min_dist)
+{
+  if (evaluator)
+    evaluator->randomizePlantPositions(octomap_vpp::pointToOctomath(min), octomap_vpp::pointToOctomath(max), min_dist);
+  else
+    gtLoader->randomizePlantPositions(octomap_vpp::pointToOctomath(min), octomap_vpp::pointToOctomath(max), min_dist);
+}
+
 void OctreeManager::publishMap()
 {
   octomap_msgs::Octomap map_msg;

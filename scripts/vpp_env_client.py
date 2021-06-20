@@ -54,6 +54,16 @@ class EnvironmentClient:
         action_msg.relativePose.orientation.z = data[5]
         action_msg.relativePose.orientation.w = data[6]
 
+    def encodeRandomizationParameters(self, action_msg, min_point, max_point, min_dist):
+        action_msg.init("resetAndRandomize")
+        action_msg.resetAndRandomize.min.x = min_point[0]
+        action_msg.resetAndRandomize.min.y = min_point[1]
+        action_msg.resetAndRandomize.min.z = min_point[2]
+        action_msg.resetAndRandomize.max.x = max_point[0]
+        action_msg.resetAndRandomize.max.y = max_point[1]
+        action_msg.resetAndRandomize.max.z = max_point[2]
+        action_msg.resetAndRandomize.minDist = min_dist
+
     def sendAction(self, action_msg):
         self.socket.send(action_msg.to_bytes())
 
@@ -87,6 +97,11 @@ class EnvironmentClient:
         action_msg.reset = None
         return self.sendAction(action_msg)
 
+    def sendResetAndRandomize(self, min_point, max_point, min_dist):
+        action_msg = action_capnp.Action.new_message()
+        self.encodeRandomizationParameters(action_msg, min_point, max_point, min_dist)
+        return self.sendAction(action_msg)
+
 
 def main(args):
     client = EnvironmentClient()
@@ -104,6 +119,7 @@ def main(args):
     print("robotJoints")
     print(robotJoints)
     print("Reward", reward)
+    client.sendResetAndRandomize([-1, -1, -0.1], [1, 1, 0.1], 0.4)
 
 if __name__ == '__main__':
     main(sys.argv)
