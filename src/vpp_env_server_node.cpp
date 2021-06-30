@@ -34,7 +34,7 @@ int main(int argc, char **argv)
 
   // construct a REP (reply) socket and bind to interface
   zmq::socket_t socket(context, zmq::socket_type::rep);
-  socket.bind("tcp://*:5555");
+  socket.connect("tcp://localhost:5555");
 
   double tree_resolution = nh.param<double>("/roi_viewpoint_planner/tree_resolution", 0.01);
   std::string wstree_default_package = ros::package::getPath("ur_with_cam_gazebo");
