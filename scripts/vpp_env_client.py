@@ -1,4 +1,5 @@
 import sys
+import signal
 import os
 import time
 import zmq
@@ -13,6 +14,7 @@ class EnvironmentClient:
     def __init__(self, handle_simulation=False):
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.REQ)
+        self.socket.RCVTIMEO = 1000 # in milliseconds
         self.socket.bind("tcp://*:5555")
 
         if handle_simulation:
@@ -21,6 +23,7 @@ class EnvironmentClient:
             self.launch_file = roslaunch.rlutil.resolve_launch_arguments(['vpp_learning_ros', 'ur_with_cam.launch'])
             self.launch_args = ['world_name:=world19', 'base:=retractable']
             self.launch_files = [(self.launch_file[0], self.launch_args)]
+            signal.signal(signal.SIGINT, self.sigint_handler)
 
     def startSimulation(self):
         self.parent = roslaunch.parent.ROSLaunchParent(self.uuid, self.launch_files)
@@ -85,10 +88,25 @@ class EnvironmentClient:
         action_msg.resetAndRandomize.minDist = min_dist
 
     def sendAction(self, action_msg):
-        self.socket.send(action_msg.to_bytes())
+        while True:
+            print('Sending message')
+            try:
+                self.socket.send(action_msg.to_bytes(), flags=zmq.NOBLOCK)
+            except zmq.ZMQError:
+                print('Could not send message, trying again in 1s...')
+                time.sleep(1)
+                continue
+            break
 
-        #  Get the reply.
-        message = self.socket.recv()
+        while True:
+            #  Get the reply.
+            print('Receiving message')
+            try:
+                message = self.socket.recv()
+            except zmq.ZMQError:
+                print('No response received, trying again...')
+                continue
+            break
         obs_msg = observation_capnp.Observation.from_bytes(message)
         return self.decodeObservation(obs_msg)
 
@@ -122,6 +140,11 @@ class EnvironmentClient:
         self.encodeRandomizationParameters(action_msg, min_point, max_point, min_dist)
         return self.sendAction(action_msg)
 
+    def sigint_handler(self, sig, frame):
+        print('SIGINT received')
+        self.shutdownSimulation()
+        self.socket.close()
+        sys.exit(0)
 
 def main(args):
     # client = EnvironmentClient()

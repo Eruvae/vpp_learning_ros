@@ -1,3 +1,4 @@
 *.vscode
 *.capnp.c++
 *.capnp.h
+__pycache__
