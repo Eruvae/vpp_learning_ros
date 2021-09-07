@@ -59,6 +59,8 @@ int main(int argc, char **argv)
     oc_manager.startEvaluator();
   }
 
+  double accumulatedPlanLength = 0, accumulatedTrajectoryDuration = 0;
+
   while(ros::ok())
   {
       zmq::message_t request;
@@ -75,6 +77,7 @@ int main(int argc, char **argv)
       double msg_decode_time = (ros::Time::now() - message_received_time).toSec();
       ROS_INFO_STREAM("Decoding message took " << msg_decode_time << "s");
       double planning_time = 0;
+      double plan_length = 0, traj_duration = 0;
       switch (act.which())
       {
       case vpp_msg::Action::NONE:
@@ -89,6 +92,8 @@ int main(int argc, char **argv)
         bool success = controller.reset();
         oc_manager.resetOctomap();
 
+        accumulatedPlanLength = 0, accumulatedTrajectoryDuration = 0;
+
         if (evaluate_results)
           oc_manager.resetEvaluator();
 
@@ -101,8 +106,8 @@ int main(int argc, char **argv)
         ROS_INFO_STREAM("Action: Relative joint target received");
         ros::Time planning_start = ros::Time::now();
         std::vector<double> relative_joint_values = capnpListToVector<double, capnp::Kind::PRIMITIVE>(act.getRelativeJointTarget());
-        double plan_length = 0, traj_duration = 0;
         bool success = controller.moveToStateRelative(relative_joint_values, false, &plan_length, &traj_duration);
+        accumulatedPlanLength += plan_length, accumulatedTrajectoryDuration += traj_duration;
         if (evaluate_results)
           oc_manager.saveEvaluatorData(plan_length, traj_duration);
 
@@ -115,8 +120,8 @@ int main(int argc, char **argv)
         ROS_INFO_STREAM("Action: Absolute joint target received");
         ros::Time planning_start = ros::Time::now();
         std::vector<double> joint_values = capnpListToVector<double, capnp::Kind::PRIMITIVE>(act.getAbsoluteJointTarget());
-        double plan_length = 0, traj_duration = 0;
         bool success = controller.moveToState(joint_values, false, &plan_length, &traj_duration);
+        accumulatedPlanLength += plan_length, accumulatedTrajectoryDuration += traj_duration;
         if (evaluate_results)
           oc_manager.saveEvaluatorData(plan_length, traj_duration);
 
@@ -129,8 +134,8 @@ int main(int argc, char **argv)
         geometry_msgs::Pose pose = fromActionMsg(act.getGoalPose());
         ROS_INFO_STREAM("Action: GoalPose received - " << pose);
         ros::Time planning_start = ros::Time::now();
-        double plan_length = 0, traj_duration = 0;
         bool success = controller.moveToPose(pose, false, &plan_length, &traj_duration);
+        accumulatedPlanLength += plan_length, accumulatedTrajectoryDuration += traj_duration;
         if (evaluate_results)
           oc_manager.saveEvaluatorData(plan_length, traj_duration);
 
@@ -143,8 +148,8 @@ int main(int argc, char **argv)
         geometry_msgs::Pose pose = fromActionMsg(act.getRelativePose());
         ROS_INFO_STREAM("Action: RelativePose received - " << pose);
         ros::Time planning_start = ros::Time::now();
-        double plan_length = 0, traj_duration = 0;
         bool success = controller.moveToPoseRelative(pose, false, &plan_length, &traj_duration);
+        accumulatedPlanLength += plan_length, accumulatedTrajectoryDuration += traj_duration;
         if (evaluate_results)
           oc_manager.saveEvaluatorData(plan_length, traj_duration);
 
@@ -164,6 +169,8 @@ int main(int argc, char **argv)
 
         oc_manager.randomizePlants(min_point, max_point, min_dist);
         oc_manager.resetOctomap();
+
+        accumulatedPlanLength = 0, accumulatedTrajectoryDuration = 0;
 
         if (evaluate_results)
           oc_manager.resetEvaluator();
@@ -212,6 +219,8 @@ int main(int argc, char **argv)
       obs.setFoundRois(reward);
       obs.setTotalRoiCells(oc_manager.getMaxGtReward());
       obs.setPlanningTime(planning_time);
+
+      obs.setEvalTotalTrajectoryDuration(accumulatedTrajectoryDuration);
 
       double reward_comp_time = (ros::Time::now() - reward_comp_start_time).toSec();
       ROS_INFO_STREAM("Computing reward took " << reward_comp_time << "s");
