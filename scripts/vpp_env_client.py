@@ -38,12 +38,6 @@ class EnvironmentClient:
         print('Shutdown complete')
 
     def decodeObservation(self, obs_msg):
-        shape = (obs_msg.layers, obs_msg.height, obs_msg.width)
-        unknownCount = np.reshape(np.array(obs_msg.unknownCount), shape)
-        freeCount = np.reshape(np.array(obs_msg.freeCount), shape)
-        occupiedCount = np.reshape(np.array(obs_msg.occupiedCount), shape)
-        roiCount = np.reshape(np.array(obs_msg.roiCount), shape)
-
         robotPose = self.poseToNumpyArray(obs_msg.robotPose)
         robotJoints = np.array(obs_msg.robotJoints)
 
@@ -52,7 +46,17 @@ class EnvironmentClient:
         else:
             reward = 0
 
-        return unknownCount, freeCount, occupiedCount, roiCount, robotPose, robotJoints, reward
+        which = obs_msg.map.which()
+        if which == 'countMap':
+            shape = (obs_msg.map.countMap.layers, obs_msg.map.countMap.height, obs_msg.map.countMap.width)
+            unknownCount = np.reshape(np.array(obs_msg.map.countMap.unknownCount), shape)
+            freeCount = np.reshape(np.array(obs_msg.map.countMap.freeCount), shape)
+            occupiedCount = np.reshape(np.array(obs_msg.map.countMap.occupiedCount), shape)
+            roiCount = np.reshape(np.array(obs_msg.map.countMap.roiCount), shape)
+            return unknownCount, freeCount, occupiedCount, roiCount, robotPose, robotJoints, reward
+        elif which == 'pointcloud':
+            pointcloud = obs_msg.map.pointcloud
+            return pointcloud, robotPose, robotJoints, reward
 
     def poseToNumpyArray(self, pose):
         return np.array([pose.position.x, pose.position.y, pose.position.z, pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w])
@@ -79,13 +83,7 @@ class EnvironmentClient:
 
     def encodeRandomizationParameters(self, action_msg, min_point, max_point, min_dist):
         action_msg.init("resetAndRandomize")
-        action_msg.resetAndRandomize.min.x = min_point[0]
-        action_msg.resetAndRandomize.min.y = min_point[1]
-        action_msg.resetAndRandomize.min.z = min_point[2]
-        action_msg.resetAndRandomize.max.x = max_point[0]
-        action_msg.resetAndRandomize.max.y = max_point[1]
-        action_msg.resetAndRandomize.max.z = max_point[2]
-        action_msg.resetAndRandomize.minDist = min_dist
+
 
     def sendAction(self, action_msg):
         while True:
@@ -130,14 +128,20 @@ class EnvironmentClient:
         self.encodeRelativePose(action_msg, relative_pose)
         return self.sendAction(action_msg)
 
-    def sendReset(self):
+    def sendReset(self, randomize=False, min_point=[-1, -1, -0.1], max_point=[1, 1, 0.1], min_dist=0.4, map_type='unchanged'):
         action_msg = action_capnp.Action.new_message()
-        action_msg.reset = None
-        return self.sendAction(action_msg)
+        action_msg.init("reset")
+        if randomize:
+            action_msg.reset.randomize = True
+            action_msg.reset.randomizationParameters.min.x = min_point[0]
+            action_msg.reset.randomizationParameters.min.y = min_point[1]
+            action_msg.reset.randomizationParameters.min.z = min_point[2]
+            action_msg.reset.randomizationParameters.max.x = max_point[0]
+            action_msg.reset.randomizationParameters.max.y = max_point[1]
+            action_msg.reset.randomizationParameters.max.z = max_point[2]
+            action_msg.reset.randomizationParameters.minDist = min_dist
 
-    def sendResetAndRandomize(self, min_point, max_point, min_dist):
-        action_msg = action_capnp.Action.new_message()
-        self.encodeRandomizationParameters(action_msg, min_point, max_point, min_dist)
+        action_msg.reset.mapType = map_type
         return self.sendAction(action_msg)
 
     def sigint_handler(self, sig, frame):
@@ -162,12 +166,12 @@ def main(args):
     # print("robotJoints")
     # print(robotJoints)
     # print("Reward", reward)
-    # client.sendResetAndRandomize([-1, -1, -0.1], [1, 1, 0.1], 0.4)
+    # client.sendReset(randomize=True, min_point=[-1, -1, -0.1], max_point=[1, 1, 0.1], min_dist=0.4)
 
     client = EnvironmentClient(handle_simulation=True)
     client.startSimulation()
     print('SEND_RESET_1')
-    observation = client.sendResetAndRandomize([-1, -1, -0.1], [1, 1, 0.1], 0.4)
+    observation = client.sendReset(randomize=True, min_point=[-1, -1, -0.1], max_point=[1, 1, 0.1], min_dist=0.4)
     print('SEND_MOVE1_1')
     observation = client.sendRelativeJointTarget([-0.1, 0, 0, 0, 0, 0])
     print('SEND_MOVE2_1')
@@ -177,7 +181,7 @@ def main(args):
     print('RESTART')
     client.startSimulation()
     print('SEND_RESET_2')
-    observation = client.sendResetAndRandomize([-1, -1, -0.1], [1, 1, 0.1], 0.4)
+    observation = client.sendReset(randomize=True, min_point=[-1, -1, -0.1], max_point=[1, 1, 0.1], min_dist=0.4)
     print('SEND_MOVE1_2')
     observation = client.sendRelativeJointTarget([-0.1, 0, 0, 0, 0, 0])
     print('SEND_MOVE2_2')

@@ -60,6 +60,7 @@ int main(int argc, char **argv)
   }
 
   double accumulatedPlanLength = 0, accumulatedTrajectoryDuration = 0;
+  vpp_msg::MapType map_type = vpp_msg::MapType::COUNT_MAP;
 
   while(ros::ok())
   {
@@ -89,7 +90,23 @@ int main(int argc, char **argv)
       {
         ROS_INFO_STREAM("Action: Reset received");
         ros::Time reset_start_time = ros::Time::now();
+        vpp_msg::Action::Reset::Reader reset_params = act.getReset();
+
         bool success = controller.reset();
+
+        if (reset_params.getRandomize())
+        {
+          geometry_msgs::Point min_point = fromActionMsg(reset_params.getRandomizationParameters().getMin());
+          geometry_msgs::Point max_point = fromActionMsg(reset_params.getRandomizationParameters().getMax());
+          double min_dist = reset_params.getRandomizationParameters().getMinDist();
+          oc_manager.randomizePlants(min_point, max_point, min_dist);
+        }
+
+        if (reset_params.getMapType() != vpp_msg::MapType::UNCHANGED)
+        {
+          map_type = reset_params.getMapType();
+        }
+
         oc_manager.resetOctomap();
 
         accumulatedPlanLength = 0, accumulatedTrajectoryDuration = 0;
@@ -97,6 +114,7 @@ int main(int argc, char **argv)
         if (evaluate_results)
           oc_manager.resetEvaluator();
 
+        ROS_INFO_STREAM("About to compute time for reset");
         double reset_time = (ros::Time::now() - reset_start_time).toSec();
         ROS_INFO_STREAM("Reset took " << reset_time << "s");
         break;
@@ -111,6 +129,7 @@ int main(int argc, char **argv)
         if (evaluate_results)
           oc_manager.saveEvaluatorData(plan_length, traj_duration);
 
+        ROS_INFO_STREAM("About to compute time for relative joint target");
         planning_time = (ros::Time::now() - planning_start).toSec();
         ROS_INFO_STREAM("Moving took " << planning_time << "s");
         break;
@@ -125,6 +144,7 @@ int main(int argc, char **argv)
         if (evaluate_results)
           oc_manager.saveEvaluatorData(plan_length, traj_duration);
 
+        ROS_INFO_STREAM("About to compute time for absolute joint target");
         planning_time = (ros::Time::now() - planning_start).toSec();
         ROS_INFO_STREAM("Moving took " << planning_time << "s");
         break;
@@ -139,6 +159,7 @@ int main(int argc, char **argv)
         if (evaluate_results)
           oc_manager.saveEvaluatorData(plan_length, traj_duration);
 
+        ROS_INFO_STREAM("About to compute time for goal pose");
         planning_time = (ros::Time::now() - planning_start).toSec();
         ROS_INFO_STREAM("Moving took " << planning_time << "s");
         break;
@@ -153,30 +174,9 @@ int main(int argc, char **argv)
         if (evaluate_results)
           oc_manager.saveEvaluatorData(plan_length, traj_duration);
 
+        ROS_INFO_STREAM("About to compute time for relative pose");
         planning_time = (ros::Time::now() - planning_start).toSec();
         ROS_INFO_STREAM("Moving took " << planning_time << "s");
-        break;
-      }
-      case vpp_msg::Action::RESET_AND_RANDOMIZE:
-      {
-        ROS_INFO_STREAM("Action: Reset and randomize received");
-        ros::Time rand_reset_start_time = ros::Time::now();
-        geometry_msgs::Point min_point = fromActionMsg(act.getResetAndRandomize().getMin());
-        geometry_msgs::Point max_point = fromActionMsg(act.getResetAndRandomize().getMax());
-        double min_dist = act.getResetAndRandomize().getMinDist();
-
-        bool success = controller.reset();
-
-        oc_manager.randomizePlants(min_point, max_point, min_dist);
-        oc_manager.resetOctomap();
-
-        accumulatedPlanLength = 0, accumulatedTrajectoryDuration = 0;
-
-        if (evaluate_results)
-          oc_manager.resetEvaluator();
-
-        double reset_time = (ros::Time::now() - rand_reset_start_time).toSec();
-        ROS_INFO_STREAM("Reset and randomize took " << reset_time << "s");
         break;
       }
       }
@@ -190,14 +190,23 @@ int main(int argc, char **argv)
 
       ros::Time obs_comp_start_time = ros::Time::now();
 
-      const size_t WIDTH = 36;
-      const size_t HEIGHT = 18;
-      const size_t LAYERS = 5;
-      const double RANGE = 2.0;
-      oc_manager.fillObservation(obs, cur_pose, WIDTH, HEIGHT, LAYERS, RANGE);
-      obs.setWidth(WIDTH);
-      obs.setHeight(HEIGHT);
-      obs.setLayers(LAYERS);
+      if (map_type == vpp_msg::MapType::COUNT_MAP)
+      {
+        vpp_msg::Observation::Map::CountMap::Builder cmap = obs.initMap().initCountMap();
+        const size_t WIDTH = 36;
+        const size_t HEIGHT = 18;
+        const size_t LAYERS = 5;
+        const double RANGE = 2.0;
+        oc_manager.fillCountMap(cmap, cur_pose, WIDTH, HEIGHT, LAYERS, RANGE);
+        cmap.setWidth(WIDTH);
+        cmap.setHeight(HEIGHT);
+        cmap.setLayers(LAYERS);
+      }
+      else if (map_type == vpp_msg::MapType::POINTCLOUD)
+      {
+        vpp_msg::Pointcloud::Builder pc = obs.initMap().initPointcloud();
+        oc_manager.generatePointcloud(pc);
+      }
 
       vpp_msg::Pose::Builder pose_msg = obs.initRobotPose();
       toActionMsg(pose_msg, cur_tf.transform);

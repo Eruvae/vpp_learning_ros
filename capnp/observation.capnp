@@ -4,16 +4,21 @@ using Cxx = import "/capnp/c++.capnp";
 $Cxx.namespace("vpp_msg");
 
 using import "pose.capnp".Pose;
+using import "pointcloud.capnp".Pointcloud;
 
 struct Observation {
-  unknownCount @0 :List(UInt32);
-  freeCount @1 :List(UInt32);
-  occupiedCount @2 :List(UInt32);
-  roiCount @3 :List(UInt32);
-
-  width @4 :UInt32;
-  height @5 :UInt32;
-  layers @6 :UInt32;
+  map :union {
+    countMap :group{
+      unknownCount @0 :List(UInt32);
+      freeCount @1 :List(UInt32);
+      occupiedCount @2 :List(UInt32);
+      roiCount @3 :List(UInt32);
+      width @4 :UInt32;
+      height @5 :UInt32;
+      layers @6 :UInt32;
+    }
+    pointcloud @13 :Pointcloud;
+  }
 
   foundRois @7 :UInt32;
   planningTime @8 :Float64;

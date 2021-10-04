@@ -139,13 +139,13 @@ void OctreeManager::publishMap()
   }
 }
 
-void OctreeManager::fillObservation(vpp_msg::Observation::Builder &obs, const octomap::pose6d &viewpoint, size_t theta_steps, size_t phi_steps, size_t layers, double range)
+void OctreeManager::fillCountMap(vpp_msg::Observation::Map::CountMap::Builder &cmap, const octomap::pose6d &viewpoint, size_t theta_steps, size_t phi_steps, size_t layers, double range)
 {
   size_t list_size = theta_steps * phi_steps * layers;
-  capnp::List<uint32_t>::Builder unknownCount = obs.initUnknownCount(list_size);
-  capnp::List<uint32_t>::Builder freeCount = obs.initFreeCount(list_size);
-  capnp::List<uint32_t>::Builder occupiedCount = obs.initOccupiedCount(list_size);
-  capnp::List<uint32_t>::Builder roiCount = obs.initRoiCount(list_size);
+  capnp::List<uint32_t>::Builder unknownCount = cmap.initUnknownCount(list_size);
+  capnp::List<uint32_t>::Builder freeCount = cmap.initFreeCount(list_size);
+  capnp::List<uint32_t>::Builder occupiedCount = cmap.initOccupiedCount(list_size);
+  capnp::List<uint32_t>::Builder roiCount = cmap.initRoiCount(list_size);
 
   double layer_range = range / layers;
 
@@ -212,6 +212,27 @@ void OctreeManager::fillObservation(vpp_msg::Observation::Builder &obs, const oc
     }
   }*/
   tree_mtx.unlock();
+}
+
+void OctreeManager::generatePointcloud(vpp_msg::Pointcloud::Builder &pc)
+{
+  tree_mtx.lock();
+  std::vector<octomap::point3d> points_vec;
+  for (auto it = planningTree->begin_leafs(), end = planningTree->end_leafs(); it != end; it++)
+  {
+    if (planningTree->isNodeOccupied(*it))
+    {
+      points_vec.push_back(it.getCoordinate());
+    }
+  }
+  tree_mtx.unlock();
+  capnp::List<vpp_msg::Point>::Builder points = pc.initPoints(points_vec.size());
+  for (size_t i = 0; i < points_vec.size(); i++)
+  {
+    points[i].setX(points_vec[i].x());
+    points[i].setY(points_vec[i].y());
+    points[i].setZ(points_vec[i].z());
+  }
 }
 
 uint32_t OctreeManager::getReward()
