@@ -9,6 +9,7 @@ import action_capnp
 import observation_capnp
 import numpy as np
 import roslaunch
+from timeit import default_timer as timer
 
 class EnvironmentClient:
     def __init__(self, handle_simulation=False):
@@ -55,8 +56,18 @@ class EnvironmentClient:
             roiCount = np.reshape(np.array(obs_msg.map.countMap.roiCount), shape)
             return unknownCount, freeCount, occupiedCount, roiCount, robotPose, robotJoints, reward
         elif which == 'pointcloud':
-            pointcloud = obs_msg.map.pointcloud
-            return pointcloud, robotPose, robotJoints, reward
+            print('Converting pointcloud...')
+            start = timer()
+            pointcloud = obs_msg.map.pointcloud.points
+            points = np.zeros((len(pointcloud), 3))
+            for i in range(len(pointcloud)):
+                points[i, 0] = pointcloud[i].x
+                points[i, 1] = pointcloud[i].y
+                points[i, 2] = pointcloud[i].z
+
+            end = timer()
+            print('Converting pointcloud took', end - start, 's')
+            return points, robotPose, robotJoints, reward
 
     def poseToNumpyArray(self, pose):
         return np.array([pose.position.x, pose.position.y, pose.position.z, pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w])
@@ -150,6 +161,7 @@ class EnvironmentClient:
         self.socket.close()
         sys.exit(0)
 
+
 def main(args):
     # client = EnvironmentClient()
     # unknownCount, freeCount, occupiedCount, roiCount, robotPose, robotJoints, reward = client.sendRelativeJointTarget([-0.1, 0, 0, 0, 0, 0]) # client.sendRelativePose([0.1, 0, 0, 0, 0, 0, 1])
@@ -188,6 +200,7 @@ def main(args):
     observation = client.sendRelativeJointTarget([0, 0.1, 0, 0, 0, 0])
     print('SHUTDOWN_2')
     client.shutdownSimulation()
+
 
 if __name__ == '__main__':
     main(sys.argv)
