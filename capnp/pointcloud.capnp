@@ -6,5 +6,6 @@ $Cxx.namespace("vpp_msg");
 using import "pose.capnp".Point;
 
 struct Pointcloud {
-  points @0 :List(Point);
+  points @0 :List(Float64);
+  labels @1 :List(Int64);
 }

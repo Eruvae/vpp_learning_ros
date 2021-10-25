@@ -422,11 +422,11 @@ def main(args):
     net.eval()
 
     client = EnvironmentClient(handle_simulation=False)
-    pointcloud, robotPose, robotJoints, reward = client.sendReset(map_type='pointcloud')
+    points, labels, robotPose, robotJoints, reward = client.sendReset(map_type='pointcloud')
 
     dataset = []
     for i in range(in_nchannel):
-        dataset.append(pointcloudToNetInput(pointcloud, resolution, 0))
+        dataset.append(pointcloudToNetInput(points, resolution, 0))
 
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, collate_fn=collate_pointcloud_fn)
 
@@ -434,7 +434,7 @@ def main(args):
 
     visualize(net, dataloader, device, in_nchannel, batch_size)
 
-    # visualize_one(net, pointcloud, device)
+    # visualize_one(net, points, device)
 
 
 if __name__ == '__main__':

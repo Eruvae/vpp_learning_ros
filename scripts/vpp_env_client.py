@@ -58,16 +58,12 @@ class EnvironmentClient:
         elif which == 'pointcloud':
             print('Converting pointcloud...')
             start = timer()
-            pointcloud = obs_msg.map.pointcloud.points
-            points = np.zeros((len(pointcloud), 3))
-            for i in range(len(pointcloud)):
-                points[i, 0] = pointcloud[i].x
-                points[i, 1] = pointcloud[i].y
-                points[i, 2] = pointcloud[i].z
-
+            points = np.asarray(obs_msg.map.pointcloud.points)
+            labels = np.asarray(obs_msg.map.pointcloud.labels)
+            points = points.reshape((len(labels), 3))
             end = timer()
             print('Converting pointcloud took', end - start, 's')
-            return points, robotPose, robotJoints, reward
+            return points, labels, robotPose, robotJoints, reward
 
     def poseToNumpyArray(self, pose):
         return np.array([pose.position.x, pose.position.y, pose.position.z, pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w])
