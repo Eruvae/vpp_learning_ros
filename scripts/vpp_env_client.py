@@ -43,7 +43,8 @@ class EnvironmentClient:
         robotJoints = np.array(obs_msg.robotJoints)
 
         if obs_msg.planningTime > 0:
-            reward = obs_msg.foundRois / obs_msg.planningTime
+            # reward = obs_msg.foundRois / obs_msg.planningTime
+            reward = obs_msg.foundRois
         else:
             reward = 0
 
@@ -70,7 +71,8 @@ class EnvironmentClient:
             return points, robotPose, robotJoints, reward
 
     def poseToNumpyArray(self, pose):
-        return np.array([pose.position.x, pose.position.y, pose.position.z, pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w])
+        return np.array([pose.position.x, pose.position.y, pose.position.z, pose.orientation.x, pose.orientation.y,
+                         pose.orientation.z, pose.orientation.w])
 
     def encodeGoalPose(self, action_msg, data):
         action_msg.init("goalPose")
