@@ -1,4 +1,5 @@
 *.vscode
 *.capnp.c++
 *.capnp.h
+*.pth
 __pycache__
