@@ -399,7 +399,8 @@ def visualize_one(net, xyz, device):  # not working
 
 
 def main(args):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
     resolution = 128
     in_nchannel = 4
     weights = "modelnet_reconstruction.pth"
