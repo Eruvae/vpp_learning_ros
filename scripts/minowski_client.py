@@ -284,6 +284,7 @@ class GenerativeNet(nn.Module):
 
         return out_cls, targets, out6
 
+
 def PointCloud(points, colors=None):
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points)
@@ -292,7 +293,7 @@ def PointCloud(points, colors=None):
     return pcd
 
 
-def pointcloudToNetInput(xyz, resolution, idx=0):
+def pointcloudToNetInput(xyz, resolution, feats):
     # Use color or other features if available
     # feats = np.ones((len(xyz), 1))
 
@@ -303,10 +304,14 @@ def pointcloudToNetInput(xyz, resolution, idx=0):
 
     # return (coords, feats)
 
-    xyz = xyz * resolution
-    coords, inds = ME.utils.sparse_quantize(xyz, return_index=True)
+    print('Input', xyz.shape, feats.shape)
 
-    return (coords, xyz[inds], idx)
+    xyz = xyz * resolution
+    coords, features, inds = ME.utils.sparse_quantize(xyz, features=np.expand_dims(feats, axis=1), return_index=True)
+
+    print('Output', coords.shape, inds.shape, features.shape)
+
+    return (coords, xyz[inds], features)
 
 
 def collate_pointcloud_fn(list_data):
@@ -316,7 +321,7 @@ def collate_pointcloud_fn(list_data):
     return {
         "coords": coords,
         "xyzs": [torch.from_numpy(feat).float() for feat in feats],
-        "labels": torch.LongTensor(labels),
+        "labels": labels
     }
 
 
@@ -427,7 +432,7 @@ def main(args):
 
     dataset = []
     for i in range(in_nchannel):
-        dataset.append(pointcloudToNetInput(points, resolution, 0))
+        dataset.append(pointcloudToNetInput(points, resolution, labels))
 
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, collate_fn=collate_pointcloud_fn)
 

@@ -31,10 +31,10 @@ from time import time
 import urllib
 
 # Must be imported before large libs
-from autoencoder.ae_dataset import load_pcd_file, quantize, load_mesh_file
+from autoencoder.ae_dataset import load_pcd_file, quantize, quantize_with_feats, load_mesh_file
 from autoencoder.data_reader import PointCloud, CollationAndTransformationAE
 from autoencoder.network import CompletionShadowNet
-from minowski_client import pointcloudToNetInput
+from minowski_client import pointcloudToNetInput, collate_pointcloud_fn
 from vpp_env_client import EnvironmentClient
 
 try:
@@ -238,16 +238,78 @@ def visualize_one(net, file, device, config, transform=None):
             return
 
 
+def visualize_one_live(net, points, labels, device, config, transform=None):
+    net.eval()
+    crit = nn.BCEWithLogitsLoss()
+    n_vis = 0
+
+    coords, feats, in_feat = quantize_with_feats(points, labels, transform=transform, resolution=config.resolution)
+    # coords, feats = list(zip(*list_data))
+    # coords : { list : 16 } : [Tensor:(4556,3),Tensor(3390,3) ... ] 一个batch中所有物体的所有points的坐标
+    coords = [coords]
+    feats = [feats]
+    # coords, feats = random_crop(coords, feats, config.resolution)
+
+    # 裁掉了部分坐标
+    data_dict = {
+        "coords": ME.utils.batched_coordinates(coords),
+        "xyzs": [torch.from_numpy(feat).float() for feat in feats],
+        "cropped_coords": coords,
+        # "labels": torch.LongTensor(labels),
+    }
+    
+    print(torch.ones((len(data_dict["coords"]), 1)))
+    in_feat = torch.FloatTensor(in_feat)
+    print(in_feat)
+
+    sin = ME.SparseTensor(
+        features=in_feat,
+        coordinates=data_dict["coords"],
+        device=device,
+    )
+
+    # Generate target sparse tensor
+    cm = sin.coordinate_manager
+    target_key, _ = cm.insert_and_map(
+        ME.utils.batched_coordinates(data_dict["xyzs"]).to(device),
+        string_id="target",
+    )
+    # Generate from a dense tensor
+    out_cls, targets, sout = net(sin, target_key)
+    num_layers, loss = len(out_cls), 0
+    for out_cl, target in zip(out_cls, targets):
+        loss += (
+                crit(out_cl.F.squeeze(), target.type(out_cl.F.dtype).to(device))
+                / num_layers
+        )
+
+    batch_coords, batch_feats = sout.decomposed_coordinates_and_features
+    for b, (coords, feats) in enumerate(zip(batch_coords, batch_feats)):
+        pcd = PointCloud(coords)
+        pcd.estimate_normals()
+        pcd.translate([0.6 * config.resolution, 0, 0])
+        pcd.rotate(M, np.array([[0.0], [0.0], [0.0]]))
+        opcd = PointCloud(data_dict["cropped_coords"][b])
+        opcd.translate([-0.6 * config.resolution, 0, 0])
+        opcd.estimate_normals()
+        opcd.rotate(M, np.array([[0.0], [0.0], [0.0]]))
+        o3d.visualization.draw_geometries([pcd, opcd])
+
+        n_vis += 1
+        if n_vis > config.max_visualization:
+            return
+
+
 def visualize(net, dataloader, device, config):
     net.eval()
     crit = nn.BCEWithLogitsLoss()
     n_vis = 0
 
     for data_dict in dataloader:
-        in_feat = torch.ones((len(data_dict["coords"]), 1))
-
+        print(data_dict["coords"].shape)
+        print(data_dict["labels"].shape)
         sin = ME.SparseTensor(
-            features=in_feat,
+            features=data_dict["labels"],
             coordinates=data_dict["coords"],
             device=device,
         )
@@ -304,22 +366,19 @@ if __name__ == "__main__":
     net.load_state_dict(checkpoint["state_dict"])
 
     client = EnvironmentClient(handle_simulation=False)
-    pointcloud, robotPose, robotJoints, reward = client.sendReset(map_type='pointcloud')
+    points, labels, robotPose, robotJoints, reward = client.sendReset(map_type='pointcloud')
 
     dataset = []
     in_nchannel = 4
     resolution = 128
     batch_size = 4
 
-    for i in range(in_nchannel):
-        dataset.append(pointcloudToNetInput(pointcloud, resolution, 0))
+    # for i in range(in_nchannel):
+    #     dataset.append(pointcloudToNetInput(points, resolution, labels))
 
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
-                                             collate_fn=CollationAndTransformationAE(config.resolution))
+    # dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, collate_fn=CollationAndTransformationAE)
 
-    print(dataloader)
-
-    visualize(net, dataloader, device, config)
+    visualize_one_live(net, points, labels, device, config)
     # visualize(net, dataloader, device, config)
     # pcd_path = "/media/zeng/Data/dataset/Pheno4D/Maize01/M01_0313_a_label1.pcd"
     # mesh_path = "/media/zeng/Data/dataset/ModelNet40/airplane/train/airplane_0001.off"

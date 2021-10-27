@@ -151,6 +151,19 @@ def quantize(xyz, resolution, transform):
     return coords, xyz[inds]
 
 
+def quantize_with_feats(xyz, feats, resolution, transform):
+    # Use labels (free, occupied, ROI) as features
+    feats = np.expand_dims(feats, axis=1)
+
+    if transform:
+        xyz, feats = transform(xyz, feats)
+
+    # Get coords
+    xyz = xyz * resolution
+    coords, feats, inds = ME.utils.sparse_quantize(xyz, features=feats, return_index=True)
+    return coords, xyz[inds], feats
+
+
 def resample_mesh(mesh_cad, density=1):
     """
     https://chrischoy.github.io/research/barycentric-coordinate-for-mesh-sampling/
