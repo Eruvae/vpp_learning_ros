@@ -115,6 +115,7 @@ def train(net, dataloader, device, config):
 
         optimizer.zero_grad()
 
+        # TODO 这个特征被初始化为1
         in_feat = torch.ones((len(data_dict["coords"]), 1))
 
         sin = ME.SparseTensor(

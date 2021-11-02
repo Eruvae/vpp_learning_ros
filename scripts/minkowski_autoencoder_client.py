@@ -238,6 +238,68 @@ def visualize_one(net, file, device, config, transform=None):
             return
 
 
+def visualize_with_features(net, points, labels, device, config, transform=None):
+    net.eval()
+    crit = nn.BCEWithLogitsLoss()
+    n_vis = 0
+
+    coords, feats, in_feat = quantize_with_feats(points, labels, transform=transform, resolution=config.resolution)
+    # coords, feats = list(zip(*list_data))
+    # coords : { list : 16 } : [Tensor:(4556,3),Tensor(3390,3) ... ] 一个batch中所有物体的所有points的坐标
+    coords = [coords]
+    feats = [feats]
+    # coords, feats = random_crop(coords, feats, config.resolution)
+
+    # 裁掉了部分坐标
+    data_dict = {
+        "coords": ME.utils.batched_coordinates(coords),
+        "xyzs": [torch.from_numpy(feat).float() for feat in feats],
+        "cropped_coords": coords,
+        # "labels": torch.LongTensor(labels),
+    }
+
+    print(torch.ones((len(data_dict["coords"]), 1)))
+    in_feat = torch.FloatTensor(in_feat)
+    print(in_feat)
+
+    sin = ME.SparseTensor(
+        features=in_feat,
+        coordinates=data_dict["coords"],
+        device=device,
+    )
+
+    # Generate target sparse tensor
+    cm = sin.coordinate_manager
+    target_key, _ = cm.insert_and_map(
+        ME.utils.batched_coordinates(data_dict["xyzs"]).to(device),
+        string_id="target",
+    )
+    # Generate from a dense tensor
+    out_cls, targets, sout = net(sin, target_key)
+    num_layers, loss = len(out_cls), 0
+    for out_cl, target in zip(out_cls, targets):
+        loss += (
+                crit(out_cl.F.squeeze(), target.type(out_cl.F.dtype).to(device))
+                / num_layers
+        )
+
+    batch_coords, batch_feats = sout.decomposed_coordinates_and_features
+    for b, (coords, feats) in enumerate(zip(batch_coords, batch_feats)):
+        pcd = PointCloud(coords)
+        pcd.estimate_normals()
+        pcd.translate([0.6 * config.resolution, 0, 0])
+        pcd.rotate(M, np.array([[0.0], [0.0], [0.0]]))
+        opcd = PointCloud(data_dict["cropped_coords"][b])
+        opcd.translate([-0.6 * config.resolution, 0, 0])
+        opcd.estimate_normals()
+        opcd.rotate(M, np.array([[0.0], [0.0], [0.0]]))
+        o3d.visualization.draw_geometries([pcd, opcd])
+
+        n_vis += 1
+        if n_vis > config.max_visualization:
+            return
+
+
 def visualize_one_live(net, points, labels, device, config, transform=None):
     net.eval()
     crit = nn.BCEWithLogitsLoss()
@@ -257,7 +319,7 @@ def visualize_one_live(net, points, labels, device, config, transform=None):
         "cropped_coords": coords,
         # "labels": torch.LongTensor(labels),
     }
-    
+
     print(torch.ones((len(data_dict["coords"]), 1)))
     in_feat = torch.FloatTensor(in_feat)
     print(in_feat)

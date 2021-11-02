@@ -503,9 +503,11 @@ class CompletionShadowNet(nn.Module):
         with torch.no_grad():
             target = torch.zeros(len(out), dtype=torch.bool, device=out.device)
             cm = out.coordinate_manager
+            # 把 target 跳着取， 得到跳着取的健值， 相当于降采样
             strided_target_key = cm.stride(
                 target_key, out.tensor_stride[0],
             )
+            # 将out的
             kernel_map = cm.kernel_map(
                 out.coordinate_map_key,
                 strided_target_key,
