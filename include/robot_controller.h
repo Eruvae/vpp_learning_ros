@@ -38,6 +38,7 @@ public:
   bool moveToState(const robot_state::RobotState &goal_state, bool async=false, double *plan_length=nullptr, double *traj_duration=nullptr);
   bool moveToState(const std::vector<double> &joint_values, bool async=false, double *plan_length=nullptr, double *traj_duration=nullptr);
   bool moveToStateRelative(const std::vector<double> &relative_joint_values, bool async=false, double *plan_length=nullptr, double *traj_duration=nullptr);
+  bool moveToRandomTarget(bool async=false, const ros::Duration &timeout=ros::Duration(60));
 };
 
 #endif // ROBOT_CONTROLLER_H
