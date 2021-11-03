@@ -31,9 +31,9 @@ from time import time
 import urllib
 
 # Must be imported before large libs
-from autoencoder.ae_dataset import make_data_loader
-from data_reader import make_data_loader_completion, PointCloud, make_pheno4d_data_loader_ae
-from network import CompletionShadowNet
+from autoencoder.ae_dataset import make_data_loader, make_data_loader_with_features
+from autoencoder.network_vae import VAE
+from network_complete import CompletionShadowNet
 
 try:
     import open3d as o3d
@@ -90,6 +90,83 @@ parser.add_argument("--max_visualization", type=int, default=4)
 ###############################################################################
 # End of utility functions
 ###############################################################################
+def train_vae(net, dataloader, device, config):
+    optimizer = optim.SGD(
+        net.parameters(),
+        lr=config.lr,
+        momentum=config.momentum,
+        weight_decay=config.weight_decay,
+    )
+    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.95)
+
+    crit = nn.BCEWithLogitsLoss()
+
+    start_iter = 0
+    # if config.resume is not None:
+    #     checkpoint = torch.load(config.resume)
+    #     print("Resuming weights")
+    #     net.load_state_dict(checkpoint["state_dict"])
+    #     optimizer.load_state_dict(checkpoint["optimizer"])
+    #     scheduler.load_state_dict(checkpoint["scheduler"])
+    #     start_iter = checkpoint["curr_iter"]
+
+    net.train()
+    train_iter = iter(dataloader)
+    # val_iter = iter(val_dataloader)
+    logging.info(f"LR: {scheduler.get_lr()}")
+    for i in range(start_iter, config.max_iter):
+
+        s = time()
+        data_dict = train_iter.next()
+        d = time() - s
+
+        optimizer.zero_grad()
+        sin = ME.SparseTensor(
+            features=torch.ones(len(data_dict["coords"]), 1),
+            coordinates=data_dict["coords"].int(),
+            device=device,
+        )
+
+        # Generate target sparse tensor
+        target_key = sin.coordinate_map_key
+
+        out_cls, targets, sout, means, log_vars, zs = net(sin, target_key)
+        num_layers, BCE = len(out_cls), 0
+        losses = []
+        for out_cl, target in zip(out_cls, targets):
+            curr_loss = crit(out_cl.F.squeeze(), target.type(out_cl.F.dtype).to(device))
+            losses.append(curr_loss.item())
+            BCE += curr_loss / num_layers
+
+        KLD = -0.5 * torch.mean(
+            torch.mean(1 + log_vars.F - means.F.pow(2) - log_vars.F.exp(), 1)
+        )
+        loss = KLD + BCE
+
+        loss.backward()
+        optimizer.step()
+        t = time() - s
+
+        if i % config.stat_freq == 0:
+            logging.info(
+                f"Iter: {i}, Loss: {loss.item():.3e}, Depths: {len(out_cls)} Data Loading Time: {d:.3e}, Tot Time: {t:.3e}"
+            )
+
+        if i % config.val_freq == 0 and i > 0:
+            torch.save(
+                {
+                    "state_dict": net.state_dict(),
+                    "optimizer": optimizer.state_dict(),
+                    "scheduler": scheduler.state_dict(),
+                    "curr_iter": i,
+                },
+                config.weights,
+            )
+
+            scheduler.step()
+            logging.info(f"LR: {scheduler.get_lr()}")
+
+            net.train()
 
 
 def train(net, dataloader, device, config):
@@ -116,10 +193,11 @@ def train(net, dataloader, device, config):
         optimizer.zero_grad()
 
         # TODO 这个特征被初始化为1
-        in_feat = torch.ones((len(data_dict["coords"]), 1))
+
+        # in_feat = torch.ones((len(data_dict["coords"]), 1))
 
         sin = ME.SparseTensor(
-            features=in_feat,
+            features=data_dict["feats"],
             coordinates=data_dict["coords"],
             device=device,
         )
@@ -130,10 +208,6 @@ def train(net, dataloader, device, config):
             ME.utils.batched_coordinates(data_dict["xyzs"]).to(device),
             string_id="target",
         )
-        # target_key, _ = cm.insert_and_map(
-        #     data_dict["coords"],
-        #     string_id="target",
-        # )
         # Generate from a dense tensor
         out_cls, targets, sout = net(sin, target_key)
         num_layers, loss = len(out_cls), 0
@@ -169,64 +243,18 @@ def train(net, dataloader, device, config):
             net.train()
 
 
-def visualize(net, dataloader, device, config):
-    net.eval()
-    crit = nn.BCEWithLogitsLoss()
-    n_vis = 0
-
-    for data_dict in dataloader:
-        in_feat = torch.ones((len(data_dict["coords"]), 1))
-
-        sin = ME.SparseTensor(
-            feats=in_feat,
-            coords=data_dict["coords"],
-        ).to(device)
-
-        # Generate target sparse tensor
-        cm = sin.coords_man
-        target_key = cm.create_coords_key(
-            ME.utils.batched_coordinates(data_dict["xyzs"]),
-            force_creation=True,
-            allow_duplicate_coords=True,
-        )
-
-        # Generate from a dense tensor
-        out_cls, targets, sout = net(sin, target_key)
-        num_layers, loss = len(out_cls), 0
-        for out_cl, target in zip(out_cls, targets):
-            loss += (
-                    crit(out_cl.F.squeeze(), target.type(out_cl.F.dtype).to(device))
-                    / num_layers
-            )
-
-        batch_coords, batch_feats = sout.decomposed_coordinates_and_features
-        for b, (coords, feats) in enumerate(zip(batch_coords, batch_feats)):
-            pcd = PointCloud(coords)
-            pcd.estimate_normals()
-            pcd.translate([0.6 * config.resolution, 0, 0])
-            pcd.rotate(M, np.array([[0.0], [0.0], [0.0]]))
-            opcd = PointCloud(data_dict["cropped_coords"][b])
-            opcd.translate([-0.6 * config.resolution, 0, 0])
-            opcd.estimate_normals()
-            opcd.rotate(M, np.array([[0.0], [0.0], [0.0]]))
-            o3d.visualization.draw_geometries([pcd, opcd])
-
-            n_vis += 1
-            if n_vis > config.max_visualization:
-                return
-
-
 if __name__ == "__main__":
     config = parser.parse_args()
     logging.info(config)
     # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
     device = torch.device("cpu")
-    # path_to_data = "/media/zeng/Data/dataset/ModelNet40"
-    paths_to_data = ["/media/zeng/Data/dataset/Pheno4D/*/*.pcd", "/media/zeng/Data/dataset/ModelNet40/chair/train/*.off"]
-    # paths_to_data = ["/media/zeng/Data/dataset/Pheno4D/*/*.pcd"]
 
-    dataloader = make_data_loader(
+    # path_to_data = "/media/zeng/Data/dataset/ModelNet40"
+    # paths_to_data = ["/media/zeng/Data/dataset/Pheno4D/*/*.pcd"]
+    # paths_to_data = ["/media/zeng/Data/dataset/Pheno4D/*/*.pcd",
+    #                  "/media/zeng/Data/dataset/ModelNet40/chair/train/*.off"]
+    paths_to_data = ["temp_data/observation_48.obj"]
+    dataloader = make_data_loader_with_features(
         paths_to_data,
         "train",
         augment_data=True,
@@ -237,22 +265,9 @@ if __name__ == "__main__":
         config=config,
     )
 
-    net = CompletionShadowNet(config.resolution)
-    net.to(device)
+    net = CompletionShadowNet(config.resolution).to(device)
+    # net = VAE().to(device)
 
     logging.info(net)
 
-    if True:
-        train(net, dataloader, device, config)
-    else:
-        if not os.path.exists(config.weights):
-            logging.info(f"Downloaing pretrained weights. This might take a while...")
-            urllib.request.urlretrieve(
-                "https://bit.ly/36d9m1n", filename=config.weights
-            )
-
-        logging.info(f"Loading weights from {config.weights}")
-        checkpoint = torch.load(config.weights)
-        net.load_state_dict(checkpoint["state_dict"])
-
-        visualize(net, dataloader, device, config)
+    train(net, dataloader, device, config)

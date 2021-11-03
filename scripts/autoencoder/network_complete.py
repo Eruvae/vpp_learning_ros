@@ -1,14 +1,3 @@
-import os
-import sys
-import subprocess
-import argparse
-import logging
-import numpy as np
-from time import time
-import urllib
-
-# Must be imported before large libs
-
 try:
     import open3d as o3d
 except ImportError:
@@ -19,6 +8,7 @@ import torch.nn as nn
 import torch.utils.data
 import torch.optim as optim
 import MinkowskiEngine as ME
+
 
 class CompletionNet(nn.Module):
     ENC_CHANNELS = [16, 32, 64, 128, 256, 512, 1024]
@@ -435,7 +425,6 @@ class CompletionShadowNet(nn.Module):
             ME.MinkowskiBatchNorm(enc_ch[3]),
             ME.MinkowskiELU(),
         )
-
 
         # Decoder
 
