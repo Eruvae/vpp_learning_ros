@@ -122,7 +122,7 @@ def train_vae(net, dataloader, device, config):
 
         optimizer.zero_grad()
         sin = ME.SparseTensor(
-            features=torch.ones(len(data_dict["coords"]), 1),
+            features=data_dict["feats"],
             coordinates=data_dict["coords"].int(),
             device=device,
         )
@@ -265,9 +265,9 @@ if __name__ == "__main__":
         config=config,
     )
 
-    net = CompletionShadowNet(config.resolution).to(device)
-    # net = VAE().to(device)
+    # net = CompletionShadowNet(config.resolution).to(device)
+    net = VAE().to(device)
 
     logging.info(net)
 
-    train(net, dataloader, device, config)
+    train_vae(net, dataloader, device, config)

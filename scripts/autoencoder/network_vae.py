@@ -120,7 +120,7 @@ class Encoder(nn.Module):
         out = self.block5(out)
         out = self.block6(out)
         out = self.block7(out)
-        out = self.global_pool(out)
+        # out = self.global_pool(out)
         mean = self.linear_mean(out)
         log_var = self.linear_log_var(out)
         return mean, log_var
