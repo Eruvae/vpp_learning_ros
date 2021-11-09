@@ -131,3 +131,15 @@ bool RobotController::moveToStateRelative(const std::vector<double> &relative_jo
   }
   return moveToState(joint_values, async, plan_length, traj_duration);
 }
+
+bool RobotController::moveToRandomTarget(bool async, const ros::Duration &timeout)
+{
+  manipulator_group.setRandomTarget();
+  bool success = false;
+  ros::Time start_time = ros::Time::now();
+  while(!success && (ros::Time::now() - start_time) < timeout)
+  {
+    success = planAndExecute(async);
+  }
+  return success;
+}
