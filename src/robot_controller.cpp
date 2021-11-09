@@ -137,7 +137,7 @@ bool RobotController::moveToRandomTarget(bool async, const ros::Duration &timeou
   manipulator_group.setRandomTarget();
   bool success = false;
   ros::Time start_time = ros::Time::now();
-  while(!success && (ros::Time::now() - start_time) < timeout)
+  while(!success && ros::ok() && (ros::Time::now() - start_time) < timeout)
   {
     success = planAndExecute(async);
   }

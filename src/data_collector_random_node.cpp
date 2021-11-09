@@ -20,12 +20,10 @@ int main(int argc, char **argv)
   std::string map_frame = nh.param<std::string>("/roi_viewpoint_planner/map_frame", "world");
   std::string ws_frame = nh.param<std::string>("/roi_viewpoint_planner/ws_frame", "arm_base_link");
 
-  bool evaluate_results = nhp.param<bool>("evaluate_results", false);
-
   tf2_ros::Buffer tfBuffer(ros::Duration(30));
   tf2_ros::TransformListener tfListener(tfBuffer);
 
-  OctreeManager oc_manager(nh, tfBuffer, map_frame, tree_resolution, evaluate_results);
+  OctreeManager oc_manager(nh, tfBuffer, map_frame, tree_resolution, false);
   RobotController controller(nh, tfBuffer, map_frame);
   controller.reset();
   oc_manager.resetOctomap();
@@ -33,7 +31,7 @@ int main(int argc, char **argv)
   const size_t NUM_SAMPLES_TO_COLLECT = 10;
   const ros::Duration MOVE_TIMEOUT = ros::Duration(60);
 
-  for (size_t i=0; i<NUM_SAMPLES_TO_COLLECT; i++)
+  for (size_t i=0; i<NUM_SAMPLES_TO_COLLECT && ros::ok(); i++)
   {
     bool moved = controller.moveToRandomTarget(false, MOVE_TIMEOUT);
     if (!moved)
