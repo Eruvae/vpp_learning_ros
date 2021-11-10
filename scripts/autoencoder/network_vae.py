@@ -9,23 +9,8 @@ import torch.utils.data
 import MinkowskiEngine as ME
 
 
-class VAE(nn.Module):
-    def __init__(self):
-        nn.Module.__init__(self)
-        self.encoder = Encoder()
-        self.decoder = Decoder()
-
-    def forward(self, sinput, gt_target):
-        means, log_vars = self.encoder(sinput)
-        zs = means
-        if self.training:
-            zs = zs + torch.exp(0.5 * log_vars.F) * torch.randn_like(log_vars.F)
-        out_cls, targets, sout = self.decoder(zs, gt_target)
-        return out_cls, targets, sout, means, log_vars, zs
-
-
 class Encoder(nn.Module):
-    CHANNELS = [16, 32, 64, 128, 256, 512, 1024]
+    CHANNELS = [16, 32, 64, 128, 256, 512]
 
     def __init__(self):
         nn.Module.__init__(self)
@@ -88,19 +73,10 @@ class Encoder(nn.Module):
             ME.MinkowskiELU(),
         )
 
-        self.block7 = nn.Sequential(
-            ME.MinkowskiConvolution(ch[5], ch[6], kernel_size=3, stride=2, dimension=3),
-            ME.MinkowskiBatchNorm(ch[6]),
-            ME.MinkowskiELU(),
-            ME.MinkowskiConvolution(ch[6], ch[6], kernel_size=3, dimension=3),
-            ME.MinkowskiBatchNorm(ch[6]),
-            ME.MinkowskiELU(),
-        )
-
         self.global_pool = ME.MinkowskiGlobalPooling()
 
-        self.linear_mean = ME.MinkowskiLinear(ch[6], ch[6], bias=True)
-        self.linear_log_var = ME.MinkowskiLinear(ch[6], ch[6], bias=True)
+        self.linear_mean = ME.MinkowskiLinear(ch[5], ch[5], bias=True)
+        self.linear_log_var = ME.MinkowskiLinear(ch[5], ch[5], bias=True)
         self.weight_initialization()
 
     def weight_initialization(self):
@@ -113,21 +89,26 @@ class Encoder(nn.Module):
                 nn.init.constant_(m.bn.bias, 0)
 
     def forward(self, sinput):
-        out = self.block1(sinput)
-        out = self.block2(out)
-        out = self.block3(out)
-        out = self.block4(out)
-        out = self.block5(out)
-        out = self.block6(out)
-        out = self.block7(out)
-        # out = self.global_pool(out)
-        mean = self.linear_mean(out)
-        log_var = self.linear_log_var(out)
+        out1 = self.block1(sinput)
+        out2 = self.block2(out1)
+        out3 = self.block3(out2)
+        out4 = self.block4(out3)
+        print("----------------------------")
+
+        print("out4:", out4)
+        out5 = self.block5(out4)
+        print("out5:", out5)
+        out6 = self.block6(out5)
+        print("out6:", out6)
+        out_global = self.global_pool(out6)
+        print("out_global:", out_global)
+        mean = self.linear_mean(out_global)
+        log_var = self.linear_log_var(out_global)
         return mean, log_var
 
 
 class Decoder(nn.Module):
-    CHANNELS = [1024, 512, 256, 128, 64, 32, 16]
+    CHANNELS = [512, 256, 128, 64, 32, 16]
     resolution = 128
 
     def __init__(self):
@@ -224,22 +205,6 @@ class Decoder(nn.Module):
             ch[5], 1, kernel_size=1, bias=True, dimension=3
         )
 
-        # Block 6
-        self.block6 = nn.Sequential(
-            ME.MinkowskiGenerativeConvolutionTranspose(
-                ch[5], ch[6], kernel_size=2, stride=2, dimension=3
-            ),
-            ME.MinkowskiBatchNorm(ch[6]),
-            ME.MinkowskiELU(),
-            ME.MinkowskiConvolution(ch[6], ch[6], kernel_size=3, dimension=3),
-            ME.MinkowskiBatchNorm(ch[6]),
-            ME.MinkowskiELU(),
-        )
-
-        self.block6_cls = ME.MinkowskiConvolution(
-            ch[6], 1, kernel_size=1, bias=True, dimension=3
-        )
-
         # pruning
         self.pruning = ME.MinkowskiPruning()
 
@@ -288,7 +253,6 @@ class Decoder(nn.Module):
         # If training, force target shape generation, use net.eval() to disable
         if self.training:
             keep1 += target
-
         # Remove voxels 32
         out1 = self.pruning(out1, keep1)
 
@@ -303,8 +267,10 @@ class Decoder(nn.Module):
         if self.training:
             keep2 += target
 
+        # print("out2a:", out2)
         # Remove voxels 16
         out2 = self.pruning(out2, keep2)
+        # print("out2b:", out2)
 
         # Block 3
         out3 = self.block3(out2)
@@ -316,9 +282,10 @@ class Decoder(nn.Module):
 
         if self.training:
             keep3 += target
-
+        # print("out3a:", out3)
         # Remove voxels 8
         out3 = self.pruning(out3, keep3)
+        # print("out3b:", out3)
 
         # Block 4
         out4 = self.block4(out3)
@@ -330,7 +297,7 @@ class Decoder(nn.Module):
 
         if self.training:
             keep4 += target
-
+        # print("dd")
         # Remove voxels 4
         out4 = self.pruning(out4, keep4)
 
@@ -342,26 +309,32 @@ class Decoder(nn.Module):
         out_cls.append(out5_cls)
         keep5 = (out5_cls.F > 0).squeeze()
 
+        # print("ee")
+        # # Last layer does not require keep
+
+        if keep5.sum() > 0:
+            # Remove voxels 2
+            out5 = self.pruning(out5, keep5)
+        # # if self.training:
+        # #   keep6 += target
+        #
+        # # Remove voxels 1
+        # if keep6.sum() > 0:
+        #     out6 = self.pruning(out6, keep6)
+
+        return out_cls, targets, out5
+
+
+class VAE(nn.Module):
+    def __init__(self):
+        nn.Module.__init__(self)
+        self.encoder = Encoder()
+        self.decoder = Decoder()
+
+    def forward(self, sinput, gt_target):
+        means, log_vars = self.encoder(sinput)
+        zs = means
         if self.training:
-            keep5 += target
-
-        # Remove voxels 2
-        out5 = self.pruning(out5, keep5)
-
-        # Block 5
-        out6 = self.block6(out5)
-        out6_cls = self.block6_cls(out6)
-        target = self.get_target(out6, target_key)
-        targets.append(target)
-        out_cls.append(out6_cls)
-        keep6 = (out6_cls.F > 0).squeeze()
-
-        # Last layer does not require keep
-        # if self.training:
-        #   keep6 += target
-
-        # Remove voxels 1
-        if keep6.sum() > 0:
-            out6 = self.pruning(out6, keep6)
-
-        return out_cls, targets, out6
+            zs = zs + torch.exp(0.5 * log_vars.F) * torch.randn_like(log_vars.F)
+        out_cls, targets, sout = self.decoder(zs, gt_target)
+        return out_cls, targets, sout, means, log_vars, zs

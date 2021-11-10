@@ -90,86 +90,10 @@ parser.add_argument("--max_visualization", type=int, default=4)
 ###############################################################################
 # End of utility functions
 ###############################################################################
-def train_vae(net, dataloader, device, config):
-    optimizer = optim.SGD(
-        net.parameters(),
-        lr=config.lr,
-        momentum=config.momentum,
-        weight_decay=config.weight_decay,
-    )
-    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.95)
+def train(dataloader, device, config):
+    net = CompletionShadowNet(config.resolution).to(device)
+    logging.info(net)
 
-    crit = nn.BCEWithLogitsLoss()
-
-    start_iter = 0
-    # if config.resume is not None:
-    #     checkpoint = torch.load(config.resume)
-    #     print("Resuming weights")
-    #     net.load_state_dict(checkpoint["state_dict"])
-    #     optimizer.load_state_dict(checkpoint["optimizer"])
-    #     scheduler.load_state_dict(checkpoint["scheduler"])
-    #     start_iter = checkpoint["curr_iter"]
-
-    net.train()
-    train_iter = iter(dataloader)
-    # val_iter = iter(val_dataloader)
-    logging.info(f"LR: {scheduler.get_lr()}")
-    for i in range(start_iter, config.max_iter):
-
-        s = time()
-        data_dict = train_iter.next()
-        d = time() - s
-
-        optimizer.zero_grad()
-        sin = ME.SparseTensor(
-            features=data_dict["feats"],
-            coordinates=data_dict["coords"].int(),
-            device=device,
-        )
-
-        # Generate target sparse tensor
-        target_key = sin.coordinate_map_key
-
-        out_cls, targets, sout, means, log_vars, zs = net(sin, target_key)
-        num_layers, BCE = len(out_cls), 0
-        losses = []
-        for out_cl, target in zip(out_cls, targets):
-            curr_loss = crit(out_cl.F.squeeze(), target.type(out_cl.F.dtype).to(device))
-            losses.append(curr_loss.item())
-            BCE += curr_loss / num_layers
-
-        KLD = -0.5 * torch.mean(
-            torch.mean(1 + log_vars.F - means.F.pow(2) - log_vars.F.exp(), 1)
-        )
-        loss = KLD + BCE
-
-        loss.backward()
-        optimizer.step()
-        t = time() - s
-
-        if i % config.stat_freq == 0:
-            logging.info(
-                f"Iter: {i}, Loss: {loss.item():.3e}, Depths: {len(out_cls)} Data Loading Time: {d:.3e}, Tot Time: {t:.3e}"
-            )
-
-        if i % config.val_freq == 0 and i > 0:
-            torch.save(
-                {
-                    "state_dict": net.state_dict(),
-                    "optimizer": optimizer.state_dict(),
-                    "scheduler": scheduler.state_dict(),
-                    "curr_iter": i,
-                },
-                config.weights,
-            )
-
-            scheduler.step()
-            logging.info(f"LR: {scheduler.get_lr()}")
-
-            net.train()
-
-
-def train(net, dataloader, device, config):
     optimizer = optim.SGD(
         net.parameters(),
         lr=config.lr,
@@ -182,8 +106,8 @@ def train(net, dataloader, device, config):
 
     net.train()
     train_iter = iter(dataloader)
-    # val_iter = iter(val_dataloader)
     logging.info(f"LR: {scheduler.get_lr()}")
+
     for i in range(config.max_iter):
 
         s = time()
@@ -192,10 +116,6 @@ def train(net, dataloader, device, config):
 
         optimizer.zero_grad()
 
-        # TODO 这个特征被初始化为1
-
-        # in_feat = torch.ones((len(data_dict["coords"]), 1))
-
         sin = ME.SparseTensor(
             features=data_dict["feats"],
             coordinates=data_dict["coords"],
@@ -203,11 +123,13 @@ def train(net, dataloader, device, config):
         )
 
         # Generate target sparse tensor
-        cm = sin.coordinate_manager
-        target_key, _ = cm.insert_and_map(
-            ME.utils.batched_coordinates(data_dict["xyzs"]).to(device),
-            string_id="target",
-        )
+        # cm = sin.coordinate_manager
+        # target_key, _ = cm.insert_and_map(
+        #     ME.utils.batched_coordinates(data_dict["xyzs"]).to(device),
+        #     string_id="target",
+        # )
+        target_key = sin.coordinate_map_key
+
         # Generate from a dense tensor
         out_cls, targets, sout = net(sin, target_key)
         num_layers, loss = len(out_cls), 0
@@ -251,10 +173,11 @@ if __name__ == "__main__":
 
     # path_to_data = "/media/zeng/Data/dataset/ModelNet40"
     # paths_to_data = ["/media/zeng/Data/dataset/Pheno4D/*/*.pcd"]
-    # paths_to_data = ["/media/zeng/Data/dataset/Pheno4D/*/*.pcd",
-    #                  "/media/zeng/Data/dataset/ModelNet40/chair/train/*.off"]
-    paths_to_data = ["temp_data/observation_48.obj"]
-    dataloader = make_data_loader_with_features(
+    paths_to_data = ["/media/zeng/Data/dataset/Pheno4D/*/*.pcd",
+                     "/media/zeng/Data/dataset/ModelNet40/chair/train/*.off"]
+
+    # paths_to_data = ["/home/zeng/catkin_ws/data/*.cpc", "/home/zeng/catkin_ws/data/*/*.cpc"]
+    dataloader = make_data_loader(
         paths_to_data,
         "train",
         augment_data=True,
@@ -265,9 +188,4 @@ if __name__ == "__main__":
         config=config,
     )
 
-    # net = CompletionShadowNet(config.resolution).to(device)
-    net = VAE().to(device)
-
-    logging.info(net)
-
-    train_vae(net, dataloader, device, config)
+    train(dataloader, device, config)

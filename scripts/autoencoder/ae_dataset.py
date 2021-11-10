@@ -1,4 +1,6 @@
 import os
+import sys
+
 import pickle
 import random
 import logging
@@ -9,6 +11,10 @@ from torch.utils.data.sampler import Sampler
 import torch
 import torch.utils.data
 import MinkowskiEngine as ME
+import capnp
+
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../..', "capnp"))
+import pointcloud_capnp
 
 try:
     import open3d as o3d
@@ -67,9 +73,12 @@ def load_mesh_file(mesh_file_path):
 
 def construct_data_batch(quantized_coords_batched, original_coords_batched, feats_batched=None):
     if feats_batched is None:
+        coords = ME.utils.batched_coordinates(quantized_coords_batched)
+
         data_batch_dict = {
-            "coords": ME.utils.batched_coordinates(quantized_coords_batched),
+            "coords": coords,
             "xyzs": [torch.from_numpy(ori_coord).float() for ori_coord in original_coords_batched],
+            "feats": torch.ones(len(coords), 1)
         }
     else:
         data_batch_dict = {
@@ -127,7 +136,8 @@ def quantize_coordinates_with_feats(xyz, feats, resolution):
 
     """
     # Use labels (free, occupied, ROI) as features
-    feats = np.expand_dims(feats, axis=1)
+    if feats.ndim < 2:
+        feats = np.expand_dims(feats, axis=1)
     # feats = np.ones((len(xyz), 1))
 
     # Get coords
@@ -180,32 +190,37 @@ def make_data_loader_with_features(paths_to_data, phase, augment_data, batch_siz
 
 
 class AEDatasetWithFeatures(torch.utils.data.Dataset):
+    # TODO 改这个地方
     def __init__(self, paths_to_data, phase, transform=None, config=None):
         self.phase = phase
         self.cache = {}
         self.transform = transform
         self.resolution = config.resolution
-        fnames = []
-        for path_to_data in paths_to_data:
-            fnames.extend(glob.glob(path_to_data))
-        self.files = fnames
 
-        self.xyzs = []
-        self.labels = []
-        for file_path in self.files:
-            points_batch, labels_batch = load_batches_points_labels_from_pickle(file_path)
-            self.xyzs.extend(points_batch)
-            self.labels.extend(labels_batch)
+        # load from path
+        fnames = []
+        for paths_to_data in paths_to_data:
+            fnames.extend(glob.glob(paths_to_data))
+        self.files = fnames
         print()
         # loading into cache
 
     def __len__(self):
-        return len(self.xyzs)
+        return len(self.files)
 
     def __getitem__(self, idx):
-        xyz = self.xyzs[idx]
-        feats = self.labels[idx]
-        quantized_coords, original_coords, feats_at_inds = quantize_coordinates_with_feats(xyz, feats=feats,
+        f = open(self.files[idx], 'rb')
+        if idx in self.cache:
+            points, labels = self.cache[idx]
+        else:
+            pointcloud = pointcloud_capnp.Pointcloud.read(f, traversal_limit_in_words=2 ** 63)
+            points = np.reshape(np.array(pointcloud.points), (-1, 3))
+            labels = np.array(pointcloud.labels).tolist()
+            self.cache[idx] = [points, labels]
+
+        labels_one_hot = np.eye(4, dtype=np.int8)[labels]
+
+        quantized_coords, original_coords, feats_at_inds = quantize_coordinates_with_feats(points, feats=labels_one_hot,
                                                                                            resolution=self.resolution)
 
         return (quantized_coords, original_coords, feats_at_inds, idx)
