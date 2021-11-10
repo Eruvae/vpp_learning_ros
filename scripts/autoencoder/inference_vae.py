@@ -8,7 +8,7 @@ from time import time
 import urllib
 
 # Must be imported before large libs
-from autoencoder.ae_dataset import make_data_loader, make_data_loader_with_features
+from autoencoder.ae_dataset import make_data_loader, make_data_loader_with_features, PointCloud
 from autoencoder.network_vae import VAE
 from network_complete import CompletionShadowNet
 
@@ -31,7 +31,6 @@ M = np.array(
         [-0.45528188, -0.6932309, 0.55870326],
     ]
 )
-
 parser = argparse.ArgumentParser()
 parser.add_argument("--resolution", type=int, default=128)
 parser.add_argument("--max_iter", type=int, default=30000)
@@ -48,33 +47,13 @@ parser.add_argument("--eval", action="store_true")
 parser.add_argument("--max_visualization", type=int, default=4)
 
 
-def train_vae(dataloader, device, config):
-    net = VAE().to(device)
-    logging.info(net)
-
-    optimizer = optim.SGD(
-        net.parameters(),
-        lr=config.lr,
-        momentum=config.momentum,
-        weight_decay=config.weight_decay,
-    )
-    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.95)
-
-    crit = nn.BCEWithLogitsLoss()
-
-    start_iter = 0
-
+def visualize(net, dataloader, device, config):
     net.train()
-    train_iter = iter(dataloader)
-    logging.info(f"LR: {scheduler.get_lr()}")
+    crit = nn.BCEWithLogitsLoss()
+    n_vis = 0
 
-    for i in range(start_iter, config.max_iter):
+    for data_dict in dataloader:
 
-        s = time()
-        data_dict = train_iter.next()
-        d = time() - s
-
-        optimizer.zero_grad()
         sin = ME.SparseTensor(
             features=data_dict["feats"],
             coordinates=data_dict["coords"].int(),
@@ -87,44 +66,33 @@ def train_vae(dataloader, device, config):
         out_cls, targets, sout, means, log_vars, zs = net(sin, target_key)
         num_layers, BCE = len(out_cls), 0
         losses = []
-        weight = np.array([5, 4, 3, 2, 1])
-        weight = weight / np.sum(weight)
-        count = 0
         for out_cl, target in zip(out_cls, targets):
             curr_loss = crit(out_cl.F.squeeze(), target.type(out_cl.F.dtype).to(device))
             losses.append(curr_loss.item())
-            BCE += curr_loss * weight[count]
-            count += 1
+            BCE += curr_loss / num_layers
 
         KLD = -0.5 * torch.mean(
-            torch.mean(1 + log_vars.F - means.F.pow(2) - log_vars.F.exp(), 1)
+            torch.sum(1 + log_vars.F - means.F.pow(2) - log_vars.F.exp(), 1)
         )
         loss = KLD + BCE
 
-        loss.backward()
-        optimizer.step()
-        t = time() - s
+        print(loss)
 
-        if i % config.stat_freq == 0:
-            logging.info(
-                f"Iter: {i}, Loss: {loss.item():.3e}, Depths: {len(out_cls)} Data Loading Time: {d:.3e}, Tot Time: {t:.3e}"
-            )
+        batch_coords, batch_feats = sout.decomposed_coordinates_and_features
+        for b, (coords, feats) in enumerate(zip(batch_coords, batch_feats)):
+            pcd = PointCloud(coords)
+            pcd.estimate_normals()
+            pcd.translate([0.6 * config.resolution, 0, 0])
+            pcd.rotate(M)
+            opcd = PointCloud(data_dict["xyzs"][b])
+            opcd.translate([-0.6 * config.resolution, 0, 0])
+            opcd.estimate_normals()
+            opcd.rotate(M)
+            o3d.visualization.draw_geometries([pcd, opcd])
 
-        if i % config.val_freq == 0 and i > 0:
-            torch.save(
-                {
-                    "state_dict": net.state_dict(),
-                    "optimizer": optimizer.state_dict(),
-                    "scheduler": scheduler.state_dict(),
-                    "curr_iter": i,
-                },
-                config.weights,
-            )
-
-            scheduler.step()
-            logging.info(f"LR: {scheduler.get_lr()}")
-
-            net.train()
+            n_vis += 1
+            if n_vis > config.max_visualization:
+                return
 
 
 if __name__ == "__main__":
@@ -132,9 +100,21 @@ if __name__ == "__main__":
     logging.info(config)
     # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     device = torch.device("cpu")
+    net = VAE()
+    net.to(device)
 
-    # path_to_data = "/media/zeng/Data/dataset/ModelNet40"
-    # paths_to_data = ["/media/zeng/Data/dataset/Pheno4D/*/*.pcd"]
+    logging.info(net)
+
+    if not os.path.exists(config.weights):
+        logging.info(f"Downloaing pretrained weights. This might take a while...")
+        urllib.request.urlretrieve(
+            "https://bit.ly/39TvWys", filename=config.weights
+        )
+
+    logging.info(f"Loading weights from {config.weights}")
+    checkpoint = torch.load(config.weights)
+    net.load_state_dict(checkpoint["state_dict"])
+
     paths_to_data = ["/media/zeng/Data/dataset/Pheno4D/*/*.pcd",
                      "/media/zeng/Data/dataset/ModelNet40/chair/train/*.off"]
 
@@ -148,7 +128,8 @@ if __name__ == "__main__":
         num_workers=config.num_workers,
         repeat=True,
         config=config,
-        train=True
+        train=False
     )
 
-    train_vae(dataloader, device, config)
+    with torch.no_grad():
+        visualize(net, dataloader, device, config)

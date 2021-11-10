@@ -89,19 +89,21 @@ class Encoder(nn.Module):
                 nn.init.constant_(m.bn.bias, 0)
 
     def forward(self, sinput):
+        # for coord in sinput.decomposed_coordinates:
+        #     print(coord.shape)
         out1 = self.block1(sinput)
         out2 = self.block2(out1)
         out3 = self.block3(out2)
         out4 = self.block4(out3)
-        print("----------------------------")
+        # print("----------------------------")
 
-        print("out4:", out4)
+        # print("out4:", out4)
         out5 = self.block5(out4)
-        print("out5:", out5)
+        # print("out5:", out5)
         out6 = self.block6(out5)
-        print("out6:", out6)
+        # print("out6:", out6)
         out_global = self.global_pool(out6)
-        print("out_global:", out_global)
+        # print("out_global:", out_global)
         mean = self.linear_mean(out_global)
         log_var = self.linear_log_var(out_global)
         return mean, log_var

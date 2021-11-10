@@ -202,7 +202,6 @@ class AEDatasetWithFeatures(torch.utils.data.Dataset):
         for paths_to_data in paths_to_data:
             fnames.extend(glob.glob(paths_to_data))
         self.files = fnames
-        print()
         # loading into cache
 
     def __len__(self):
@@ -226,8 +225,9 @@ class AEDatasetWithFeatures(torch.utils.data.Dataset):
         return (quantized_coords, original_coords, feats_at_inds, idx)
 
 
-def make_data_loader(paths_to_data, phase, augment_data, batch_size, shuffle, num_workers, repeat, config):
-    dset = AEDataset(paths_to_data, phase, config=config)
+def make_data_loader(paths_to_data, phase, augment_data, batch_size, shuffle, num_workers, repeat, config,train):
+    # TODO 数据什么时候被扩大到128的
+    dset = AEDataset(paths_to_data, phase, config=config,train=train)
 
     args = {
         "batch_size": batch_size,
@@ -248,7 +248,7 @@ def make_data_loader(paths_to_data, phase, augment_data, batch_size, shuffle, nu
 
 
 class AEDataset(torch.utils.data.Dataset):
-    def __init__(self, paths_to_data, phase, transform=None, config=None):
+    def __init__(self, paths_to_data, phase, transform=None, config=None, train=True):
         self.phase = phase
         self.files = []
         self.cache = {}
@@ -256,14 +256,10 @@ class AEDataset(torch.utils.data.Dataset):
         self.transform = transform
         self.resolution = config.resolution
         self.last_cache_percent = 0
-
-        # self.root = path_to_data
-        # glob.glob(os.path.join(self.root, "*/*.pcd"))
-        # fnames = glob.glob(os.path.join(self.root, "chair/train/*.off"))
+        self.train = train
         fnames = []
         for path_to_data in paths_to_data:
             fnames.extend(glob.glob(path_to_data))
-        # fnames = sorted([os.path.relpath(fname, self.root) for fname in fnames])
         self.files = fnames
         assert len(self.files) > 0, "No file loaded"
         logging.info(
@@ -303,11 +299,55 @@ class AEDataset(torch.utils.data.Dataset):
                 f"Skipping {self.files[idx]}: does not have sufficient CAD sampling density after resampling: {len(xyz)}."
             )
             return None
-        # quantized_coords, original_coords, feats_at_inds = quantize_coordinates_with_feats(xyz, feats=feats,
-        #                                                                                    resolution=resolution)
-        coords, xyz_inds = quantize_coordinates(xyz, self.resolution)
 
-        return (coords, xyz_inds, idx)
+        feats = torch.ones(len(xyz), 1)
+        quantized_coords, original_coords, feats = quantize_coordinates_with_feats(xyz, feats=feats,
+                                                                                   resolution=self.resolution)
+        if self.train:
+            coords, ori_coords, feats, rand_idx, max_range = random_crop(quantized_coords, original_coords, feats,
+                                                                         self.resolution)
+            return (coords, ori_coords, feats, idx)
+        else:
+            return (quantized_coords, original_coords, feats, idx)
+
+
+def random_crop(coords, ori_coords, feats, resolution):
+    """
+    take 1/2 part of the object
+    Args:
+        coords:
+        ori_coords:
+        feats:
+        resolution:
+
+    Returns:
+
+    """
+    partial_rate = 0.8
+    rand_idx = random.randint(0, int(resolution * (1 - partial_rate)))
+    rand_idy = random.randint(0, int(resolution * (1 - partial_rate)))
+    rand_idz = random.randint(0, int(resolution * (1 - partial_rate)))
+    max_range_x = int(resolution * partial_rate + rand_idx)
+    max_range_y = int(resolution * partial_rate + rand_idy)
+    max_range_z = int(resolution * partial_rate + rand_idz)
+
+    sel0_x = coords[:, 0] > rand_idx
+    sel1_x = coords[:, 0] < max_range_x
+    sel_x = sel0_x * sel1_x
+
+    sel0_y = coords[:, 1] > rand_idy
+    sel1_y = coords[:, 1] < max_range_y
+    sel_y = sel0_y * sel1_y
+
+    sel0_z = coords[:, 2] > rand_idz
+    sel1_z = coords[:, 2] < max_range_z
+    sel_z = sel0_z * sel1_z
+
+    sel = sel_x * sel_y * sel_z
+    coords_res, ori_coords_res, feats_res = coords[sel], ori_coords[sel], feats[sel]
+    if coords_res.shape[0] == 0:
+        return random_crop(coords, ori_coords, feats, resolution)
+    return coords_res, ori_coords_res, feats_res, rand_idx, max_range_x
 
 
 def resample_mesh(mesh_cad, density=1):
@@ -407,11 +447,11 @@ class CollationAndTransformation:
     def __call__(self, list_data):
         if len(list_data[0]) == 4:
             coords, ori_coords, feats, indx = list(zip(*list_data))
-            coords, ori_coords, feats = self.random_crop((coords, ori_coords, feats))
+            # coords, ori_coords, feats = self.random_crop((coords, ori_coords, feats))
             item = construct_data_batch(coords, ori_coords, feats)
         else:
             coords, ori_coords, indx = list(zip(*list_data))
-            coords, ori_coords = self.random_crop((coords, ori_coords))
+            # coords, ori_coords = self.random_crop((coords, ori_coords))
             item = construct_data_batch(coords, ori_coords)
 
         return item
@@ -425,12 +465,12 @@ def PointCloud(points, colors=None):
     return pcd
 
 
-def random_crop(coords_list, resolution):
-    crop_coords_list = []
-    for coords in coords_list:
-        sel = coords[:, 0] < resolution / 3
-        crop_coords_list.append(coords[sel])
-    return crop_coords_list
+# def random_crop(coords_list, resolution):
+#     crop_coords_list = []
+#     for coords in coords_list:
+#         sel = coords[:, 0] < resolution / 3
+#         crop_coords_list.append(coords[sel])
+#     return crop_coords_list
 
 
 class InfSampler(Sampler):
