@@ -9,11 +9,26 @@
 
 OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame, double tree_resolution, bool initialize_evaluator) :
   tfBuffer(tfBuffer), planningTree(new octomap_vpp::RoiOcTree(tree_resolution)), gtLoader(new roi_viewpoint_planner::GtOctreeLoader(tree_resolution)), evaluator(nullptr),
-  map_frame(map_frame), old_rois(0)
+  map_frame(map_frame), old_rois(0), tree_mtx(own_mtx)
 {
   octomapPub = nh.advertise<octomap_msgs::Octomap>("octomap", 1);
   roiSub = nh.subscribe("/detect_roi/results", 1, &OctreeManager::registerPointcloudWithRoi, this);
 
+  if (initialize_evaluator)
+  {
+    ros::NodeHandle nh_eval("evaluator");
+    std::shared_ptr<roi_viewpoint_planner::ProvidedTreeInterface> interface(new roi_viewpoint_planner::ProvidedTreeInterface(planningTree, tree_mtx));
+    evaluator.reset(new roi_viewpoint_planner::Evaluator(interface, nh, nh_eval, true, false, gtLoader));
+    eval_trial_num = 0;
+    evaluator->saveGtAsColoredCloud();
+  }
+}
+
+OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame,
+              const std::shared_ptr<octomap_vpp::RoiOcTree> &providedTree, boost::mutex &tree_mtx, bool initialize_evaluator) :
+  tfBuffer(tfBuffer), planningTree(providedTree), gtLoader(new roi_viewpoint_planner::GtOctreeLoader(providedTree->getResolution())), evaluator(nullptr),
+  map_frame(map_frame), old_rois(0), tree_mtx(tree_mtx)
+{
   if (initialize_evaluator)
   {
     ros::NodeHandle nh_eval("evaluator");
