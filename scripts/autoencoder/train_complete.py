@@ -91,7 +91,7 @@ parser.add_argument("--max_visualization", type=int, default=4)
 # End of utility functions
 ###############################################################################
 def train(dataloader, device, config):
-    net = CompletionShadowNet(config.resolution).to(device)
+    net = CompletionShadowNet().to(device)
     logging.info(net)
 
     optimizer = optim.SGD(
@@ -186,6 +186,7 @@ if __name__ == "__main__":
         num_workers=config.num_workers,
         repeat=True,
         config=config,
+        train=True
     )
 
     train(dataloader, device, config)

@@ -10,73 +10,59 @@ import MinkowskiEngine as ME
 
 
 class Encoder(nn.Module):
-    CHANNELS = [16, 32, 64, 128, 256, 512]
+    ENC_CHANNELS = [16, 32, 64, 128, 256, 512, 1024]
 
     def __init__(self):
         nn.Module.__init__(self)
 
         # Input sparse tensor must have tensor stride 128.
-        ch = self.CHANNELS
+        enc_ch = self.ENC_CHANNELS
 
-        # Block 1
-        self.block1 = nn.Sequential(
-            ME.MinkowskiConvolution(1, ch[0], kernel_size=3, stride=2, dimension=3),
-            ME.MinkowskiBatchNorm(ch[0]),
-            ME.MinkowskiELU(),
-            ME.MinkowskiConvolution(ch[0], ch[0], kernel_size=3, dimension=3),
-            ME.MinkowskiBatchNorm(ch[0]),
+        # Encoder
+        self.enc_block_s1 = nn.Sequential(
+            ME.MinkowskiConvolution(1, enc_ch[0], kernel_size=3, stride=1, dimension=3),
+            ME.MinkowskiBatchNorm(enc_ch[0]),
             ME.MinkowskiELU(),
         )
 
-        self.block2 = nn.Sequential(
-            ME.MinkowskiConvolution(ch[0], ch[1], kernel_size=3, stride=2, dimension=3),
-            ME.MinkowskiBatchNorm(ch[1]),
+        self.enc_block_s1s2 = nn.Sequential(
+            ME.MinkowskiConvolution(
+                enc_ch[0], enc_ch[1], kernel_size=2, stride=2, dimension=3
+            ),
+            ME.MinkowskiBatchNorm(enc_ch[1]),
             ME.MinkowskiELU(),
-            ME.MinkowskiConvolution(ch[1], ch[1], kernel_size=3, dimension=3),
-            ME.MinkowskiBatchNorm(ch[1]),
-            ME.MinkowskiELU(),
-        )
-
-        self.block3 = nn.Sequential(
-            ME.MinkowskiConvolution(ch[1], ch[2], kernel_size=3, stride=2, dimension=3),
-            ME.MinkowskiBatchNorm(ch[2]),
-            ME.MinkowskiELU(),
-            ME.MinkowskiConvolution(ch[2], ch[2], kernel_size=3, dimension=3),
-            ME.MinkowskiBatchNorm(ch[2]),
+            ME.MinkowskiConvolution(enc_ch[1], enc_ch[1], kernel_size=3, dimension=3),
+            ME.MinkowskiBatchNorm(enc_ch[1]),
             ME.MinkowskiELU(),
         )
 
-        self.block4 = nn.Sequential(
-            ME.MinkowskiConvolution(ch[2], ch[3], kernel_size=3, stride=2, dimension=3),
-            ME.MinkowskiBatchNorm(ch[3]),
+        self.enc_block_s2s4 = nn.Sequential(
+            ME.MinkowskiConvolution(
+                enc_ch[1], enc_ch[2], kernel_size=2, stride=2, dimension=3
+            ),
+            ME.MinkowskiBatchNorm(enc_ch[2]),
             ME.MinkowskiELU(),
-            ME.MinkowskiConvolution(ch[3], ch[3], kernel_size=3, dimension=3),
-            ME.MinkowskiBatchNorm(ch[3]),
-            ME.MinkowskiELU(),
-        )
-
-        self.block5 = nn.Sequential(
-            ME.MinkowskiConvolution(ch[3], ch[4], kernel_size=3, stride=2, dimension=3),
-            ME.MinkowskiBatchNorm(ch[4]),
-            ME.MinkowskiELU(),
-            ME.MinkowskiConvolution(ch[4], ch[4], kernel_size=3, dimension=3),
-            ME.MinkowskiBatchNorm(ch[4]),
+            ME.MinkowskiConvolution(enc_ch[2], enc_ch[2], kernel_size=3, dimension=3),
+            ME.MinkowskiBatchNorm(enc_ch[2]),
             ME.MinkowskiELU(),
         )
 
-        self.block6 = nn.Sequential(
-            ME.MinkowskiConvolution(ch[4], ch[5], kernel_size=3, stride=2, dimension=3),
-            ME.MinkowskiBatchNorm(ch[5]),
+        self.enc_block_s4s8 = nn.Sequential(
+            ME.MinkowskiConvolution(
+                enc_ch[2], enc_ch[3], kernel_size=2, stride=2, dimension=3
+            ),
+            ME.MinkowskiBatchNorm(enc_ch[3]),
             ME.MinkowskiELU(),
-            ME.MinkowskiConvolution(ch[5], ch[5], kernel_size=3, dimension=3),
-            ME.MinkowskiBatchNorm(ch[5]),
+            ME.MinkowskiConvolution(enc_ch[3], enc_ch[3], kernel_size=3, dimension=3),
+            ME.MinkowskiBatchNorm(enc_ch[3]),
             ME.MinkowskiELU(),
         )
 
         self.global_pool = ME.MinkowskiGlobalPooling()
-
-        self.linear_mean = ME.MinkowskiLinear(ch[5], ch[5], bias=True)
-        self.linear_log_var = ME.MinkowskiLinear(ch[5], ch[5], bias=True)
+        # TODO 添加激活函数 ME.MinkowskiBatchNorm(enc_ch[3]),
+        #             ME.MinkowskiELU()
+        self.linear_mean = ME.MinkowskiLinear(enc_ch[3], enc_ch[3], bias=True)
+        self.linear_log_var = ME.MinkowskiLinear(enc_ch[3], enc_ch[3], bias=True)
         self.weight_initialization()
 
     def weight_initialization(self):
@@ -89,125 +75,83 @@ class Encoder(nn.Module):
                 nn.init.constant_(m.bn.bias, 0)
 
     def forward(self, sinput):
-        # for coord in sinput.decomposed_coordinates:
-        #     print(coord.shape)
-        out1 = self.block1(sinput)
-        out2 = self.block2(out1)
-        out3 = self.block3(out2)
-        out4 = self.block4(out3)
-        # print("----------------------------")
-
-        # print("out4:", out4)
-        out5 = self.block5(out4)
-        # print("out5:", out5)
-        out6 = self.block6(out5)
-        # print("out6:", out6)
-        out_global = self.global_pool(out6)
+        enc_s1 = self.enc_block_s1(sinput)
+        enc_s2 = self.enc_block_s1s2(enc_s1)
+        enc_s4 = self.enc_block_s2s4(enc_s2)
+        enc_s8 = self.enc_block_s4s8(enc_s4)
+        # out_global = self.global_pool(enc_s8)
         # print("out_global:", out_global)
-        mean = self.linear_mean(out_global)
-        log_var = self.linear_log_var(out_global)
+        mean = self.linear_mean(enc_s8)
+        log_var = self.linear_log_var(enc_s8)
         return mean, log_var
 
 
 class Decoder(nn.Module):
-    CHANNELS = [512, 256, 128, 64, 32, 16]
-    resolution = 128
+    # CHANNELS = [512, 256, 128, 64, 32, 16]
+    DEC_CHANNELS = [16, 32, 64, 128, 256, 512, 1024]
 
     def __init__(self):
         nn.Module.__init__(self)
 
         # Input sparse tensor must have tensor stride 128.
-        ch = self.CHANNELS
-
-        # Block 1
-        self.block1 = nn.Sequential(
+        dec_ch = self.DEC_CHANNELS
+        self.resolution = 128
+        self.dec_block_s8s4 = nn.Sequential(
             ME.MinkowskiGenerativeConvolutionTranspose(
-                ch[0], ch[0], kernel_size=2, stride=2, dimension=3
+                dec_ch[3],
+                dec_ch[2],
+                kernel_size=2,
+                stride=2,
+                dimension=3,
             ),
-            ME.MinkowskiBatchNorm(ch[0]),
+            ME.MinkowskiBatchNorm(dec_ch[2]),
             ME.MinkowskiELU(),
-            ME.MinkowskiConvolution(ch[0], ch[0], kernel_size=3, dimension=3),
-            ME.MinkowskiBatchNorm(ch[0]),
+            ME.MinkowskiConvolution(dec_ch[2], dec_ch[2], kernel_size=3, dimension=3),
+            ME.MinkowskiBatchNorm(dec_ch[2]),
             ME.MinkowskiELU(),
+        )
+
+        self.dec_s4_cls = ME.MinkowskiConvolution(
+            dec_ch[2], 1, kernel_size=1, bias=True, dimension=3
+        )
+
+        self.dec_block_s4s2 = nn.Sequential(
             ME.MinkowskiGenerativeConvolutionTranspose(
-                ch[0], ch[1], kernel_size=2, stride=2, dimension=3
+                dec_ch[2],
+                dec_ch[1],
+                kernel_size=2,
+                stride=2,
+                dimension=3,
             ),
-            ME.MinkowskiBatchNorm(ch[1]),
+            ME.MinkowskiBatchNorm(dec_ch[1]),
             ME.MinkowskiELU(),
-            ME.MinkowskiConvolution(ch[1], ch[1], kernel_size=3, dimension=3),
-            ME.MinkowskiBatchNorm(ch[1]),
+            ME.MinkowskiConvolution(dec_ch[1], dec_ch[1], kernel_size=3, dimension=3),
+            ME.MinkowskiBatchNorm(dec_ch[1]),
             ME.MinkowskiELU(),
         )
 
-        self.block1_cls = ME.MinkowskiConvolution(
-            ch[1], 1, kernel_size=1, bias=True, dimension=3
+        self.dec_s2_cls = ME.MinkowskiConvolution(
+            dec_ch[1], 1, kernel_size=1, bias=True, dimension=3
         )
 
-        # Block 2
-        self.block2 = nn.Sequential(
+        self.dec_block_s2s1 = nn.Sequential(
             ME.MinkowskiGenerativeConvolutionTranspose(
-                ch[1], ch[2], kernel_size=2, stride=2, dimension=3
+                dec_ch[1],
+                dec_ch[0],
+                kernel_size=2,
+                stride=2,
+                dimension=3,
             ),
-            ME.MinkowskiBatchNorm(ch[2]),
+            ME.MinkowskiBatchNorm(dec_ch[0]),
             ME.MinkowskiELU(),
-            ME.MinkowskiConvolution(ch[2], ch[2], kernel_size=3, dimension=3),
-            ME.MinkowskiBatchNorm(ch[2]),
-            ME.MinkowskiELU(),
-        )
-
-        self.block2_cls = ME.MinkowskiConvolution(
-            ch[2], 1, kernel_size=1, bias=True, dimension=3
-        )
-
-        # Block 3
-        self.block3 = nn.Sequential(
-            ME.MinkowskiGenerativeConvolutionTranspose(
-                ch[2], ch[3], kernel_size=2, stride=2, dimension=3
-            ),
-            ME.MinkowskiBatchNorm(ch[3]),
-            ME.MinkowskiELU(),
-            ME.MinkowskiConvolution(ch[3], ch[3], kernel_size=3, dimension=3),
-            ME.MinkowskiBatchNorm(ch[3]),
+            ME.MinkowskiConvolution(dec_ch[0], dec_ch[0], kernel_size=3, dimension=3),
+            ME.MinkowskiBatchNorm(dec_ch[0]),
             ME.MinkowskiELU(),
         )
 
-        self.block3_cls = ME.MinkowskiConvolution(
-            ch[3], 1, kernel_size=1, bias=True, dimension=3
+        self.dec_s1_cls = ME.MinkowskiConvolution(
+            dec_ch[0], 1, kernel_size=1, bias=True, dimension=3
         )
-
-        # Block 4
-        self.block4 = nn.Sequential(
-            ME.MinkowskiGenerativeConvolutionTranspose(
-                ch[3], ch[4], kernel_size=2, stride=2, dimension=3
-            ),
-            ME.MinkowskiBatchNorm(ch[4]),
-            ME.MinkowskiELU(),
-            ME.MinkowskiConvolution(ch[4], ch[4], kernel_size=3, dimension=3),
-            ME.MinkowskiBatchNorm(ch[4]),
-            ME.MinkowskiELU(),
-        )
-
-        self.block4_cls = ME.MinkowskiConvolution(
-            ch[4], 1, kernel_size=1, bias=True, dimension=3
-        )
-
-        # Block 5
-        self.block5 = nn.Sequential(
-            ME.MinkowskiGenerativeConvolutionTranspose(
-                ch[4], ch[5], kernel_size=2, stride=2, dimension=3
-            ),
-            ME.MinkowskiBatchNorm(ch[5]),
-            ME.MinkowskiELU(),
-            ME.MinkowskiConvolution(ch[5], ch[5], kernel_size=3, dimension=3),
-            ME.MinkowskiBatchNorm(ch[5]),
-            ME.MinkowskiELU(),
-        )
-
-        self.block5_cls = ME.MinkowskiConvolution(
-            ch[5], 1, kernel_size=1, bias=True, dimension=3
-        )
-
-        # pruning
         self.pruning = ME.MinkowskiPruning()
 
     def get_batch_indices(self, out):
@@ -242,89 +186,69 @@ class Decoder(nn.Module):
             coordinates=z_glob.C,
             tensor_stride=self.resolution,
             coordinate_manager=z_glob.coordinate_manager,
+
         )
 
-        # Block1
-        out1 = self.block1(z)
-        out1_cls = self.block1_cls(out1)
-        target = self.get_target(out1, target_key)
-        targets.append(target)
-        out_cls.append(out1_cls)
-        keep1 = (out1_cls.F > 0).squeeze()
+        dec_s4 = self.dec_block_s8s4(z)
 
-        # If training, force target shape generation, use net.eval() to disable
-        if self.training:
-            keep1 += target
-        # Remove voxels 32
-        out1 = self.pruning(out1, keep1)
+        # Add encoder features
+        # dec_s4 = dec_s4 + enc_s4
+        dec_s4_cls = self.dec_s4_cls(dec_s4)
 
-        # Block 2
-        out2 = self.block2(out1)
-        out2_cls = self.block2_cls(out2)
-        target = self.get_target(out2, target_key)
+        target = self.get_target(dec_s4, target_key)
         targets.append(target)
-        out_cls.append(out2_cls)
-        keep2 = (out2_cls.F > 0).squeeze()
+        out_cls.append(dec_s4_cls)
+        keep_s4 = (dec_s4_cls.F > 0).squeeze()
 
         if self.training:
-            keep2 += target
+            keep_s4 += target
 
-        # print("out2a:", out2)
-        # Remove voxels 16
-        out2 = self.pruning(out2, keep2)
-        # print("out2b:", out2)
+        # Remove voxels s4
+        dec_s4 = self.pruning(dec_s4, keep_s4)
 
-        # Block 3
-        out3 = self.block3(out2)
-        out3_cls = self.block3_cls(out3)
-        target = self.get_target(out3, target_key)
+        ##################################################
+        # Decoder 4 -> 2
+        ##################################################
+        dec_s2 = self.dec_block_s4s2(dec_s4)
+
+        # Add encoder features
+        # dec_s2 = dec_s2 + enc_s2
+        dec_s2_cls = self.dec_s2_cls(dec_s2)
+
+        target = self.get_target(dec_s2, target_key)
         targets.append(target)
-        out_cls.append(out3_cls)
-        keep3 = (out3_cls.F > 0).squeeze()
+        out_cls.append(dec_s2_cls)
+        keep_s2 = (dec_s2_cls.F > 0).squeeze()
 
         if self.training:
-            keep3 += target
-        # print("out3a:", out3)
-        # Remove voxels 8
-        out3 = self.pruning(out3, keep3)
-        # print("out3b:", out3)
+            keep_s2 += target
 
-        # Block 4
-        out4 = self.block4(out3)
-        out4_cls = self.block4_cls(out4)
-        target = self.get_target(out4, target_key)
+        # Remove voxels s2
+        dec_s2 = self.pruning(dec_s2, keep_s2)
+
+        ##################################################
+        # Decoder 2 -> 1
+        ##################################################
+        dec_s1 = self.dec_block_s2s1(dec_s2)
+        dec_s1_cls = self.dec_s1_cls(dec_s1)
+
+        # Add encoder features
+        # dec_s1 = dec_s1 + enc_s1
+        dec_s1_cls = self.dec_s1_cls(dec_s1)
+
+        target = self.get_target(dec_s1, target_key)
         targets.append(target)
-        out_cls.append(out4_cls)
-        keep4 = (out4_cls.F > 0).squeeze()
+        out_cls.append(dec_s1_cls)
+        keep_s1 = (dec_s1_cls.F > 0).squeeze()
 
-        if self.training:
-            keep4 += target
-        # print("dd")
-        # Remove voxels 4
-        out4 = self.pruning(out4, keep4)
+        # Last layer does not require adding the target
+        # if self.training:
+        #     keep_s1 += target
 
-        # Block 5
-        out5 = self.block5(out4)
-        out5_cls = self.block5_cls(out5)
-        target = self.get_target(out5, target_key)
-        targets.append(target)
-        out_cls.append(out5_cls)
-        keep5 = (out5_cls.F > 0).squeeze()
+        # Remove voxels s1
+        dec_s1 = self.pruning(dec_s1, keep_s1)
 
-        # print("ee")
-        # # Last layer does not require keep
-
-        if keep5.sum() > 0:
-            # Remove voxels 2
-            out5 = self.pruning(out5, keep5)
-        # # if self.training:
-        # #   keep6 += target
-        #
-        # # Remove voxels 1
-        # if keep6.sum() > 0:
-        #     out6 = self.pruning(out6, keep6)
-
-        return out_cls, targets, out5
+        return out_cls, targets, dec_s1
 
 
 class VAE(nn.Module):

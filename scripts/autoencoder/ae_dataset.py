@@ -167,8 +167,8 @@ def normalize(vertices):
 
 
 def make_data_loader_with_features(paths_to_data, phase, augment_data, batch_size, shuffle, num_workers, repeat,
-                                   config):
-    dset = AEDatasetWithFeatures(paths_to_data, phase, config=config)
+                                   config, train):
+    dset = AEDatasetWithFeatures(paths_to_data, phase, config=config, train=train)
     print("dataset size:{}".format(len(dset)))
 
     args = {
@@ -189,14 +189,36 @@ def make_data_loader_with_features(paths_to_data, phase, augment_data, batch_siz
     return loader
 
 
+def make_data_loader(paths_to_data, phase, augment_data, batch_size, shuffle, num_workers, repeat, config, train):
+    # TODO 数据什么时候被扩大到128的
+    dset = AEDataset(paths_to_data, phase, config=config, train=train)
+
+    args = {
+        "batch_size": batch_size,
+        "num_workers": num_workers,
+        "collate_fn": CollationAndTransformation(config.resolution),
+        "pin_memory": False,
+        "drop_last": True,
+    }
+
+    if repeat:
+        args["sampler"] = InfSampler(dset, shuffle)
+    else:
+        args["shuffle"] = shuffle
+
+    loader = torch.utils.data.DataLoader(dset, **args)
+
+    return loader
+
+
 class AEDatasetWithFeatures(torch.utils.data.Dataset):
     # TODO 改这个地方
-    def __init__(self, paths_to_data, phase, transform=None, config=None):
+    def __init__(self, paths_to_data, phase, transform=None, config=None, train=False):
         self.phase = phase
         self.cache = {}
         self.transform = transform
         self.resolution = config.resolution
-
+        self.train = train
         # load from path
         fnames = []
         for paths_to_data in paths_to_data:
@@ -218,33 +240,23 @@ class AEDatasetWithFeatures(torch.utils.data.Dataset):
             self.cache[idx] = [points, labels]
 
         labels_one_hot = np.eye(4, dtype=np.int8)[labels]
-
         quantized_coords, original_coords, feats_at_inds = quantize_coordinates_with_feats(points, feats=labels_one_hot,
                                                                                            resolution=self.resolution)
+        if self.train:
+            quantized_coords, original_coords, feats_at_inds, rand_idx, max_range = random_crop(quantized_coords,
+                                                                                                original_coords,
+                                                                                                feats_at_inds,
+                                                                                                self.resolution,
+                                                                                                partial_rate=0.8)
 
-        return (quantized_coords, original_coords, feats_at_inds, idx)
+            if len(quantized_coords.size()) < 1000:
+                return self.__getitem__(idx)
+            print(quantized_coords.size())
 
+            return (quantized_coords, original_coords, feats_at_inds, idx)
 
-def make_data_loader(paths_to_data, phase, augment_data, batch_size, shuffle, num_workers, repeat, config,train):
-    # TODO 数据什么时候被扩大到128的
-    dset = AEDataset(paths_to_data, phase, config=config,train=train)
-
-    args = {
-        "batch_size": batch_size,
-        "num_workers": num_workers,
-        "collate_fn": CollationAndTransformation(config.resolution),
-        "pin_memory": False,
-        "drop_last": True,
-    }
-
-    if repeat:
-        args["sampler"] = InfSampler(dset, shuffle)
-    else:
-        args["shuffle"] = shuffle
-
-    loader = torch.utils.data.DataLoader(dset, **args)
-
-    return loader
+        else:
+            return (quantized_coords, original_coords, feats_at_inds, idx)
 
 
 class AEDataset(torch.utils.data.Dataset):
@@ -306,12 +318,13 @@ class AEDataset(torch.utils.data.Dataset):
         if self.train:
             coords, ori_coords, feats, rand_idx, max_range = random_crop(quantized_coords, original_coords, feats,
                                                                          self.resolution)
+            # print(coords.size())
             return (coords, ori_coords, feats, idx)
         else:
             return (quantized_coords, original_coords, feats, idx)
 
 
-def random_crop(coords, ori_coords, feats, resolution):
+def random_crop(coords, ori_coords, feats, resolution, partial_rate=0.8):
     """
     take 1/2 part of the object
     Args:
@@ -323,7 +336,7 @@ def random_crop(coords, ori_coords, feats, resolution):
     Returns:
 
     """
-    partial_rate = 0.8
+    # partial_rate = 0.8
     rand_idx = random.randint(0, int(resolution * (1 - partial_rate)))
     rand_idy = random.randint(0, int(resolution * (1 - partial_rate)))
     rand_idz = random.randint(0, int(resolution * (1 - partial_rate)))

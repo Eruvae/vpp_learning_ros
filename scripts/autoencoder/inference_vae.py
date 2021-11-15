@@ -41,14 +41,14 @@ parser.add_argument("--momentum", type=float, default=0.9)
 parser.add_argument("--weight_decay", type=float, default=1e-4)
 parser.add_argument("--num_workers", type=int, default=1)
 parser.add_argument("--stat_freq", type=int, default=50)
-parser.add_argument("--weights", type=str, default="modelnet_completion.pth")
+parser.add_argument("--weights", type=str, default="modelnet_vae_no_global.pth")
 parser.add_argument("--load_optimizer", type=str, default="true")
 parser.add_argument("--eval", action="store_true")
 parser.add_argument("--max_visualization", type=int, default=4)
 
 
 def visualize(net, dataloader, device, config):
-    net.train()
+    net.eval()
     crit = nn.BCEWithLogitsLoss()
     n_vis = 0
 
