@@ -22,19 +22,17 @@
 # Networks", CVPR'19 (https://arxiv.org/abs/1904.08755) if you use any part
 # of the code.
 import os
+import pickle
 import sys
 import subprocess
 import argparse
 import logging
-import numpy as np
-from time import time
-import urllib
 
-# Must be imported before large libs
-from autoencoder.ae_dataset import load_pcd_file, quantize, quantize_with_feats, load_mesh_file
-from autoencoder.data_reader import PointCloud, CollationAndTransformationAE
-from autoencoder.network import CompletionShadowNet
-from minowski_client import pointcloudToNetInput, collate_pointcloud_fn
+import numpy as np
+
+from autoencoder.ae_dataset import load_batches_points_labels_from_pickle
+from autoencoder.inference import inference_one_live
+from autoencoder.network_complete import CompletionShadowNet
 from vpp_env_client import EnvironmentClient
 
 try:
@@ -48,14 +46,6 @@ import torch.utils.data
 import torch.optim as optim
 
 import MinkowskiEngine as ME
-
-M = np.array(
-    [
-        [0.80656762, -0.5868724, -0.07091862],
-        [0.3770505, 0.418344, 0.82632997],
-        [-0.45528188, -0.6932309, 0.55870326],
-    ]
-)
 
 assert (
         int(o3d.__version__.split(".")[1]) >= 8
@@ -83,7 +73,7 @@ parser.add_argument("--momentum", type=float, default=0.9)
 parser.add_argument("--weight_decay", type=float, default=1e-4)
 parser.add_argument("--num_workers", type=int, default=1)
 parser.add_argument("--stat_freq", type=int, default=50)
-parser.add_argument("--weights", type=str, default="autoencoder/modelnet_completion.pth")
+parser.add_argument("--weights", type=str, default="autoencoder/trained_models/modelnet_completion.pth")
 parser.add_argument("--load_optimizer", type=str, default="true")
 parser.add_argument("--eval", action="store_true")
 parser.add_argument("--max_visualization", type=int, default=4)
@@ -92,269 +82,34 @@ parser.add_argument("--max_visualization", type=int, default=4)
 ###############################################################################
 # End of utility functions
 ###############################################################################
+def connect_data(num, file_path):
+    """
+    connect data
+    Args:
+        num: the size of the data
+        file_path: path to save data
 
+    Returns:
 
-def train(net, dataloader, device, config):
-    optimizer = optim.SGD(
-        net.parameters(),
-        lr=config.lr,
-        momentum=config.momentum,
-        weight_decay=config.weight_decay,
-    )
-    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.95)
-
-    crit = nn.BCEWithLogitsLoss()
-
-    net.train()
-    train_iter = iter(dataloader)
-    # val_iter = iter(val_dataloader)
-    logging.info(f"LR: {scheduler.get_lr()}")
-    for i in range(config.max_iter):
-
-        s = time()
-        data_dict = train_iter.next()
-        d = time() - s
-
-        optimizer.zero_grad()
-
-        in_feat = torch.ones((len(data_dict["coords"]), 1))
-
-        sin = ME.SparseTensor(
-            features=in_feat,
-            coordinates=data_dict["coords"],
-            device=device,
-        )
-
-        # Generate target sparse tensor
-        cm = sin.coordinate_manager
-        target_key, _ = cm.insert_and_map(
-            ME.utils.batched_coordinates(data_dict["xyzs"]).to(device),
-            string_id="target",
-        )
-
-        # Generate from a dense tensor
-        out_cls, targets, sout = net(sin, target_key)
-        num_layers, loss = len(out_cls), 0
-        losses = []
-        for out_cl, target in zip(out_cls, targets):
-            curr_loss = crit(out_cl.F.squeeze(), target.type(out_cl.F.dtype).to(device))
-            losses.append(curr_loss.item())
-            loss += curr_loss / num_layers
-
-        loss.backward()
-        optimizer.step()
-        t = time() - s
-
-        if i % config.stat_freq == 0:
-            logging.info(
-                f"Iter: {i}, Loss: {loss.item():.3e}, Data Loading Time: {d:.3e}, Tot Time: {t:.3e}"
-            )
-
-        if i % config.val_freq == 0 and i > 0:
-            torch.save(
-                {
-                    "state_dict": net.state_dict(),
-                    "optimizer": optimizer.state_dict(),
-                    "scheduler": scheduler.state_dict(),
-                    "curr_iter": i,
-                },
-                config.weights,
-            )
-
-            scheduler.step()
-            logging.info(f"LR: {scheduler.get_lr()}")
-
-            net.train()
-
-
-def random_crop(coords_list, resolution):
-    crop_coords_list = []
-    for coords in coords_list:
-        sel = coords[:, 0] < resolution / 3
-        crop_coords_list.append(coords[sel])
-    return crop_coords_list
-
-
-def visualize_one(net, file, device, config, transform=None):
-    net.eval()
-    crit = nn.BCEWithLogitsLoss()
-    n_vis = 0
-    if file.endswith(".off"):
-        xyz = load_mesh_file(mesh_file=file)
-    else:
-        xyz = load_pcd_file(pcd_file=file)
-
-    coords, feats = quantize(xyz, transform=transform, resolution=config.resolution)
-    # coords, feats = list(zip(*list_data))
-    # coords : { list : 16 } : [Tensor:(4556,3),Tensor(3390,3) ... ] 一个batch中所有物体的所有points的坐标
-    coords = [coords]
-    feats = [feats]
-    # coords, feats = random_crop(coords, feats, config.resolution)
-
-    # 裁掉了部分坐标
-    data_dict = {
-        "coords": ME.utils.batched_coordinates(coords),
-        "xyzs": [torch.from_numpy(feat).float() for feat in feats],
-        "cropped_coords": coords,
-        # "labels": torch.LongTensor(labels),
-    }
-    in_feat = torch.ones((len(data_dict["coords"]), 1))
-
-    sin = ME.SparseTensor(
-        features=in_feat,
-        coordinates=data_dict["coords"],
-        device=device,
-    )
-
-    # Generate target sparse tensor
-    cm = sin.coordinate_manager
-    target_key, _ = cm.insert_and_map(
-        ME.utils.batched_coordinates(data_dict["xyzs"]).to(device),
-        string_id="target",
-    )
-    # Generate from a dense tensor
-    out_cls, targets, sout = net(sin, target_key)
-    num_layers, loss = len(out_cls), 0
-    for out_cl, target in zip(out_cls, targets):
-        loss += (
-                crit(out_cl.F.squeeze(), target.type(out_cl.F.dtype).to(device))
-                / num_layers
-        )
-
-    batch_coords, batch_feats = sout.decomposed_coordinates_and_features
-    for b, (coords, feats) in enumerate(zip(batch_coords, batch_feats)):
-        pcd = PointCloud(coords)
-        pcd.estimate_normals()
-        pcd.translate([0.6 * config.resolution, 0, 0])
-        pcd.rotate(M, np.array([[0.0], [0.0], [0.0]]))
-        opcd = PointCloud(data_dict["cropped_coords"][b])
-        opcd.translate([-0.6 * config.resolution, 0, 0])
-        opcd.estimate_normals()
-        opcd.rotate(M, np.array([[0.0], [0.0], [0.0]]))
-        o3d.visualization.draw_geometries([pcd, opcd])
-
-        n_vis += 1
-        if n_vis > config.max_visualization:
-            return
-
-
-def visualize_one_live(net, points, labels, device, config, transform=None):
-    net.eval()
-    crit = nn.BCEWithLogitsLoss()
-    n_vis = 0
-
-    coords, feats, in_feat = quantize_with_feats(points, labels, transform=transform, resolution=config.resolution)
-    # coords, feats = list(zip(*list_data))
-    # coords : { list : 16 } : [Tensor:(4556,3),Tensor(3390,3) ... ] 一个batch中所有物体的所有points的坐标
-    coords = [coords]
-    feats = [feats]
-    # coords, feats = random_crop(coords, feats, config.resolution)
-
-    # 裁掉了部分坐标
-    data_dict = {
-        "coords": ME.utils.batched_coordinates(coords),
-        "xyzs": [torch.from_numpy(feat).float() for feat in feats],
-        "cropped_coords": coords,
-        # "labels": torch.LongTensor(labels),
-    }
-    
-    print(torch.ones((len(data_dict["coords"]), 1)))
-    in_feat = torch.FloatTensor(in_feat)
-    print(in_feat)
-
-    sin = ME.SparseTensor(
-        features=in_feat,
-        coordinates=data_dict["coords"],
-        device=device,
-    )
-
-    # Generate target sparse tensor
-    cm = sin.coordinate_manager
-    target_key, _ = cm.insert_and_map(
-        ME.utils.batched_coordinates(data_dict["xyzs"]).to(device),
-        string_id="target",
-    )
-    # Generate from a dense tensor
-    out_cls, targets, sout = net(sin, target_key)
-    num_layers, loss = len(out_cls), 0
-    for out_cl, target in zip(out_cls, targets):
-        loss += (
-                crit(out_cl.F.squeeze(), target.type(out_cl.F.dtype).to(device))
-                / num_layers
-        )
-
-    batch_coords, batch_feats = sout.decomposed_coordinates_and_features
-    for b, (coords, feats) in enumerate(zip(batch_coords, batch_feats)):
-        pcd = PointCloud(coords)
-        pcd.estimate_normals()
-        pcd.translate([0.6 * config.resolution, 0, 0])
-        pcd.rotate(M, np.array([[0.0], [0.0], [0.0]]))
-        opcd = PointCloud(data_dict["cropped_coords"][b])
-        opcd.translate([-0.6 * config.resolution, 0, 0])
-        opcd.estimate_normals()
-        opcd.rotate(M, np.array([[0.0], [0.0], [0.0]]))
-        o3d.visualization.draw_geometries([pcd, opcd])
-
-        n_vis += 1
-        if n_vis > config.max_visualization:
-            return
-
-
-def visualize(net, dataloader, device, config):
-    net.eval()
-    crit = nn.BCEWithLogitsLoss()
-    n_vis = 0
-
-    for data_dict in dataloader:
-        print(data_dict["coords"].shape)
-        print(data_dict["labels"].shape)
-        sin = ME.SparseTensor(
-            features=data_dict["labels"],
-            coordinates=data_dict["coords"],
-            device=device,
-        )
-
-        # Generate target sparse tensor
-        cm = sin.coordinate_manager
-        target_key, _ = cm.insert_and_map(
-            ME.utils.batched_coordinates(data_dict["xyzs"]).to(device),
-            string_id="target",
-        )
-
-        # Generate from a dense tensor
-        out_cls, targets, sout = net(sin, target_key)
-        num_layers, loss = len(out_cls), 0
-        for out_cl, target in zip(out_cls, targets):
-            loss += (
-                    crit(out_cl.F.squeeze(), target.type(out_cl.F.dtype).to(device))
-                    / num_layers
-            )
-
-        batch_coords, batch_feats = sout.decomposed_coordinates_and_features
-        for b, (coords, feats) in enumerate(zip(batch_coords, batch_feats)):
-            pcd = PointCloud(coords)
-            pcd.estimate_normals()
-            pcd.translate([1 * config.resolution, 0, 0])
-            pcd.rotate(M, np.array([[0.0], [0.0], [0.0]]))
-            opcd = PointCloud(data_dict["cropped_coords"][b])
-            opcd.translate([-1 * config.resolution, 0, 0])
-            opcd.estimate_normals()
-            opcd.rotate(M, np.array([[0.0], [0.0], [0.0]]))
-            o3d.visualization.draw_geometries([pcd, opcd])
-
-            n_vis += 1
-            if n_vis > config.max_visualization:
-                return
+    """
+    client = EnvironmentClient(handle_simulation=False)
+    dataset = []
+    for i in range(num):
+        print("The {}-th observation".format(i))
+        points, labels, robotPose, robotJoints, reward = client.sendReset(map_type='pointcloud')
+        dataset.append([points, labels])
+    pickle.dump(dataset, open(file_path, 'wb'))
 
 
 if __name__ == "__main__":
+    # connect_data(num=48, file_path="autoencoder/temp_data/observation_48.obj")
+    points_batch, labels_batch = load_batches_points_labels_from_pickle(
+        pickle_file_path="autoencoder/temp_data/observation_48.obj")
+
     config = parser.parse_args()
     logging.info(config)
     # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
     device = torch.device("cpu")
-    # path_to_data = "/media/zeng/Data/dataset/ModelNet40"
-    path_to_data = "/media/zeng/Data/dataset/Pheno4D"
 
     net = CompletionShadowNet(config.resolution)
     net.to(device)
@@ -365,21 +120,9 @@ if __name__ == "__main__":
     checkpoint = torch.load(config.weights)
     net.load_state_dict(checkpoint["state_dict"])
 
-    client = EnvironmentClient(handle_simulation=False)
-    points, labels, robotPose, robotJoints, reward = client.sendReset(map_type='pointcloud')
-
-    dataset = []
-    in_nchannel = 4
-    resolution = 128
-    batch_size = 4
-
-    # for i in range(in_nchannel):
-    #     dataset.append(pointcloudToNetInput(points, resolution, labels))
-
-    # dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, collate_fn=CollationAndTransformationAE)
-
-    visualize_one_live(net, points, labels, device, config)
-    # visualize(net, dataloader, device, config)
-    # pcd_path = "/media/zeng/Data/dataset/Pheno4D/Maize01/M01_0313_a_label1.pcd"
-    # mesh_path = "/media/zeng/Data/dataset/ModelNet40/airplane/train/airplane_0001.off"
-    # visualize_one(net, mesh_path, device, config)
+    # client = EnvironmentClient(handle_simulation=False)
+    # points, labels, robotPose, robotJoints, reward = client.sendReset(map_type='pointcloud')
+    points_batch, labels_batch = load_batches_points_labels_from_pickle(
+        pickle_file_path="autoencoder/temp_data/observation_48.obj")
+    points, labels = points_batch[0], labels_batch[0]
+    inference_one_live(net, points, labels, device, config)

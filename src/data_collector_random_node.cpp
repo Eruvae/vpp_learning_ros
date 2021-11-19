@@ -28,7 +28,7 @@ int main(int argc, char **argv)
   controller.reset();
   oc_manager.resetOctomap();
 
-  const size_t NUM_SAMPLES_TO_COLLECT = 10;
+  const size_t NUM_SAMPLES_TO_COLLECT = 10000;
   const ros::Duration MOVE_TIMEOUT = ros::Duration(60);
 
   for (size_t i=0; i<NUM_SAMPLES_TO_COLLECT && ros::ok(); i++)

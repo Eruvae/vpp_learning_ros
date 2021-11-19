@@ -1,14 +1,3 @@
-import os
-import sys
-import subprocess
-import argparse
-import logging
-import numpy as np
-from time import time
-import urllib
-
-# Must be imported before large libs
-
 try:
     import open3d as o3d
 except ImportError:
@@ -19,6 +8,7 @@ import torch.nn as nn
 import torch.utils.data
 import torch.optim as optim
 import MinkowskiEngine as ME
+
 
 class CompletionNet(nn.Module):
     ENC_CHANNELS = [16, 32, 64, 128, 256, 512, 1024]
@@ -387,10 +377,8 @@ class CompletionShadowNet(nn.Module):
     ENC_CHANNELS = [16, 32, 64, 128, 256, 512, 1024]
     DEC_CHANNELS = [16, 32, 64, 128, 256, 512, 1024]
 
-    def __init__(self, resolution):
+    def __init__(self):
         nn.Module.__init__(self)
-
-        self.resolution = resolution
 
         # Input sparse tensor must have tensor stride 128.
         enc_ch = self.ENC_CHANNELS
@@ -435,8 +423,8 @@ class CompletionShadowNet(nn.Module):
             ME.MinkowskiBatchNorm(enc_ch[3]),
             ME.MinkowskiELU(),
         )
-
-
+        self.linear_mean = ME.MinkowskiLinear(enc_ch[3], enc_ch[3], bias=True)
+        self.linear_log_var = ME.MinkowskiLinear(enc_ch[3], enc_ch[3], bias=True)
         # Decoder
 
         self.dec_block_s8s4 = nn.Sequential(
@@ -496,6 +484,7 @@ class CompletionShadowNet(nn.Module):
             dec_ch[0], 1, kernel_size=1, bias=True, dimension=3
         )
 
+
         # pruning
         self.pruning = ME.MinkowskiPruning()
 
@@ -503,9 +492,11 @@ class CompletionShadowNet(nn.Module):
         with torch.no_grad():
             target = torch.zeros(len(out), dtype=torch.bool, device=out.device)
             cm = out.coordinate_manager
+            # 把 target 跳着取， 得到跳着取的健值， 相当于降采样
             strided_target_key = cm.stride(
                 target_key, out.tensor_stride[0],
             )
+            # 将out的
             kernel_map = cm.kernel_map(
                 out.coordinate_map_key,
                 strided_target_key,
@@ -529,6 +520,7 @@ class CompletionShadowNet(nn.Module):
         enc_s2 = self.enc_block_s1s2(enc_s1)
         enc_s4 = self.enc_block_s2s4(enc_s2)
         enc_s8 = self.enc_block_s4s8(enc_s4)
+
         dec_s4 = self.dec_block_s8s4(enc_s8)
 
         # Add encoder features
