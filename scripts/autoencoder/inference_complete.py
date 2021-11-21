@@ -46,6 +46,47 @@ parser.add_argument("--load_optimizer", type=str, default="true")
 parser.add_argument("--eval", action="store_true")
 parser.add_argument("--max_visualization", type=int, default=4)
 
+# colors = np.array([[1, 1, 0], [1, 0, 0]])
+SCANNET_COLOR_MAP = {
+    0: (255., 0., 0.),  # red
+    1: (0., 255., 0.),  # green
+    2: (0., 0., 255.),  # blue
+    3: (31., 119., 180.)
+}
+
+
+def visualize_truth(data_dict, batch_ind):
+    point = data_dict["tensor_batch_truth_coordinates"][batch_ind]
+    label = data_dict["tensor_batch_truth_feats"][batch_ind].numpy().squeeze()
+    opcd = PointCloud(point, np.array([SCANNET_COLOR_MAP[l] for l in label]))
+    opcd.translate([-1 * config.resolution, 0, 0])
+    # opcd.estimate_normals()
+    # opcd.rotate(M)
+    return opcd
+
+
+def visualize_input(data_dict, batch_ind):
+    point = data_dict["tensor_batch_crop_coordinates"][batch_ind]
+    label = data_dict["tensor_batch_crop_feats"][batch_ind].numpy().squeeze()
+    opcd = PointCloud(point, np.array([SCANNET_COLOR_MAP[l] for l in label]))
+    opcd.translate([3 * config.resolution, 0, 0])
+    opcd.estimate_normals()
+    # opcd.rotate(M)
+    return opcd
+
+
+def visualize_prediction(coords, feats=None):
+    point = coords
+    if feats is not None:
+        label = np.around(feats.numpy()).squeeze()
+        pcd = PointCloud(point, np.array([SCANNET_COLOR_MAP[l] for l in label]))
+    else:
+        pcd = PointCloud(point)
+    pcd.translate([4 * config.resolution, 0, 0])
+    pcd.estimate_normals()
+    # pcd.rotate(M)
+    return pcd
+
 
 def visualize(net, dataloader, device, config):
     net.eval()
@@ -55,35 +96,37 @@ def visualize(net, dataloader, device, config):
     for data_dict in dataloader:
 
         sin = ME.SparseTensor(
-            features=data_dict["feats"],
-            coordinates=data_dict["coords"].int(),
+            features=data_dict["crop_feats"],
+            coordinates=ME.utils.batched_coordinates(data_dict["tensor_batch_crop_coordinates"]),
             device=device,
         )
 
         # Generate target sparse tensor
-        target_key = sin.coordinate_map_key
+        cm = sin.coordinate_manager
+        target_key, _ = cm.insert_and_map(
+            coordinates=ME.utils.batched_coordinates(data_dict["tensor_batch_truth_coordinates"]).to(device),
+            string_id="target",
+        )
 
         out_cls, targets, sout = net(sin, target_key)
         num_layers, loss = len(out_cls), 0
         losses = []
         for out_cl, target in zip(out_cls, targets):
-            curr_loss = crit(out_cl.F.squeeze(), target.type(out_cl.F.dtype).to(device))
+            a1 = out_cl.F.squeeze()
+            a2 = target.type(out_cl.F.dtype).to(device)
+            curr_loss = crit(a1, a2)
             losses.append(curr_loss.item())
             loss += curr_loss / num_layers
 
         print(loss)
 
         batch_coords, batch_feats = sout.decomposed_coordinates_and_features
+        # batch_coords2, cls = out_cls.decomposed_coordinates_and_features
         for b, (coords, feats) in enumerate(zip(batch_coords, batch_feats)):
-            pcd = PointCloud(coords)
-            pcd.estimate_normals()
-            pcd.translate([0.6 * config.resolution, 0, 0])
-            pcd.rotate(M)
-            opcd = PointCloud(data_dict["xyzs"][b])
-            opcd.translate([-0.6 * config.resolution, 0, 0])
-            opcd.estimate_normals()
-            opcd.rotate(M)
-            o3d.visualization.draw_geometries([pcd, opcd])
+            pcd_input = visualize_input(data_dict, b)
+            pcd_truth = visualize_truth(data_dict, b)
+            pcd = visualize_prediction(coords)
+            o3d.visualization.draw_geometries([pcd_input, pcd_truth, pcd])
 
             n_vis += 1
             if n_vis > config.max_visualization:
@@ -109,11 +152,11 @@ if __name__ == "__main__":
     checkpoint = torch.load(config.weights)
     net.load_state_dict(checkpoint["state_dict"])
 
-    paths_to_data = ["/media/zeng/Data/dataset/Pheno4D/*/*.pcd",
-                     "/media/zeng/Data/dataset/ModelNet40/chair/train/*.off"]
+    # paths_to_data = ["/media/zeng/Data/dataset/Pheno4D/*/*.pcd",
+    #                  "/media/zeng/Data/dataset/ModelNet40/chair/train/*.off"]
 
-    # paths_to_data = ["/home/zeng/catkin_ws/data/*.cpc", "/home/zeng/catkin_ws/data/*/*.cpc"]
-    dataloader = make_data_loader(
+    paths_to_data = ["/home/zeng/catkin_ws/data/test/*.cpc"]
+    dataloader = make_data_loader_with_features(
         paths_to_data,
         "train",
         augment_data=True,
@@ -122,7 +165,7 @@ if __name__ == "__main__":
         num_workers=config.num_workers,
         repeat=True,
         config=config,
-        train=False
+        crop=True,
     )
 
     with torch.no_grad():

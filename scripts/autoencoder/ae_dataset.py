@@ -57,6 +57,7 @@ def load_batches_points_labels_from_pickle(pickle_file_path):
 def load_pcd_file(pcd_file_path):
     pcd = o3d.io.read_point_cloud(pcd_file_path)
     points = normalize(pcd.points)
+
     xyz = np.asarray(points)
 
     return xyz
@@ -71,21 +72,18 @@ def load_mesh_file(mesh_file_path):
     return xyz
 
 
-def construct_data_batch(quantized_coords_batched, original_coords_batched, feats_batched=None):
-    if feats_batched is None:
-        coords = ME.utils.batched_coordinates(quantized_coords_batched)
+def construct_data_batch(coords_crop, feats_crop, coords_truth, feats_truth):
+    coords_crop_batch = ME.utils.batched_coordinates(coords_crop)
+    feats_crop_batch = ME.utils.batched_coordinates(feats_crop)
 
-        data_batch_dict = {
-            "coords": coords,
-            "xyzs": [torch.from_numpy(ori_coord).float() for ori_coord in original_coords_batched],
-            "feats": torch.ones(len(coords), 1)
-        }
-    else:
-        data_batch_dict = {
-            "coords": ME.utils.batched_coordinates(quantized_coords_batched),
-            "xyzs": [torch.from_numpy(ori_coord).float() for ori_coord in original_coords_batched],
-            "feats": torch.cat([torch.Tensor(feats).float() for feats in feats_batched])
-        }
+    data_batch_dict = {
+        # "batched_crop_coordinates": coords_crop_batch,
+        "crop_feats": torch.cat([torch.Tensor(feats).float() for feats in feats_crop]),
+        "tensor_batch_crop_coordinates": [coord.float() for coord in coords_crop],
+        "tensor_batch_crop_feats": [torch.from_numpy(feats).float() for feats in feats_crop],
+        "tensor_batch_truth_coordinates": [coord_truth for coord_truth in coords_truth],
+        "tensor_batch_truth_feats": [torch.from_numpy(feats).float() for feats in feats_truth]
+    }
     return data_batch_dict
 
 
@@ -166,9 +164,9 @@ def normalize(vertices):
     return normalized_vertices
 
 
-def make_data_loader_with_features(paths_to_data, phase, augment_data, batch_size, shuffle, num_workers, repeat,
-                                   config, train):
-    dset = AEDatasetWithFeatures(paths_to_data, phase, config=config, train=train)
+def make_data_loader_with_features(paths_to_data, phase, augment_data, batch_size, shuffle, num_workers, repeat, config,
+                                   crop):
+    dset = AEDatasetWithFeatures(paths_to_data, phase, config=config, crop=crop)
     print("dataset size:{}".format(len(dset)))
 
     args = {
@@ -189,9 +187,10 @@ def make_data_loader_with_features(paths_to_data, phase, augment_data, batch_siz
     return loader
 
 
-def make_data_loader(paths_to_data, phase, augment_data, batch_size, shuffle, num_workers, repeat, config, train):
-    # TODO 数据什么时候被扩大到128的
-    dset = AEDataset(paths_to_data, phase, config=config, train=train)
+def make_data_loader(paths_to_data, phase, augment_data, batch_size, shuffle, num_workers, repeat, config, train,
+                     return_cropped_original):
+    dset = AEDataset(paths_to_data, phase, config=config, train=train,
+                     return_cropped_original=return_cropped_original)
 
     args = {
         "batch_size": batch_size,
@@ -213,54 +212,52 @@ def make_data_loader(paths_to_data, phase, augment_data, batch_size, shuffle, nu
 
 class AEDatasetWithFeatures(torch.utils.data.Dataset):
     # TODO 改这个地方
-    def __init__(self, paths_to_data, phase, transform=None, config=None, train=False):
+    def __init__(self, paths_to_data, phase, transform=None, config=None, crop=False, return_cropped_original=True):
         self.phase = phase
         self.cache = {}
         self.transform = transform
         self.resolution = config.resolution
-        self.train = train
+        self.crop = crop
         # load from path
         fnames = []
         for paths_to_data in paths_to_data:
             fnames.extend(glob.glob(paths_to_data))
         self.files = fnames
+        self.return_cropped_original = return_cropped_original
+
         # loading into cache
+        for file_path in self.files:
+            file = open(file_path, 'rb')
+            pointcloud = pointcloud_capnp.Pointcloud.read(file, traversal_limit_in_words=2 ** 63)
+            # points = np.reshape(np.array(pointcloud.points), (-1, 3))
+            # labels = np.array(pointcloud.labels).tolist()
+            points = np.reshape(np.array(pointcloud.points), (-1, 3))
+            labels = np.array(pointcloud.labels)
+            points_occ = points[np.where(labels != 0)]
+            labels = labels[np.where(labels != 0)]
+            if len(points_occ) >= 1000:
+                self.cache[len(self.cache)] = [points_occ, labels]
+                print("Add file:{} into cache!".format(file))
+            else:
+                print("File:{} too small!".format(file))
 
     def __len__(self):
-        return len(self.files)
+        return len(self.cache)
 
     def __getitem__(self, idx):
-        f = open(self.files[idx], 'rb')
-        if idx in self.cache:
-            points, labels = self.cache[idx]
-        else:
-            pointcloud = pointcloud_capnp.Pointcloud.read(f, traversal_limit_in_words=2 ** 63)
-            points = np.reshape(np.array(pointcloud.points), (-1, 3))
-            labels = np.array(pointcloud.labels).tolist()
-            self.cache[idx] = [points, labels]
+        points, labels = self.cache[idx]
+        # labels_one_hot = np.eye(2, dtype=np.int8)[labels - 1]
+        coords, _, feats = quantize_coordinates_with_feats(points, feats=labels,
+                                                           resolution=self.resolution)
+        # TODO rotate the pointcloud
+        coords_crop, feats_crop, coords_truth, feats_truth = random_crop(coords, feats, self.resolution,
+                                                                         partial_rate=0.5)
 
-        labels_one_hot = np.eye(4, dtype=np.int8)[labels]
-        quantized_coords, original_coords, feats_at_inds = quantize_coordinates_with_feats(points, feats=labels_one_hot,
-                                                                                           resolution=self.resolution)
-        if self.train:
-            quantized_coords, original_coords, feats_at_inds, rand_idx, max_range = random_crop(quantized_coords,
-                                                                                                original_coords,
-                                                                                                feats_at_inds,
-                                                                                                self.resolution,
-                                                                                                partial_rate=0.8)
-
-            if len(quantized_coords.size()) < 1000:
-                return self.__getitem__(idx)
-            print(quantized_coords.size())
-
-            return (quantized_coords, original_coords, feats_at_inds, idx)
-
-        else:
-            return (quantized_coords, original_coords, feats_at_inds, idx)
+        return coords_crop, feats_crop, coords_truth, feats_truth, idx
 
 
 class AEDataset(torch.utils.data.Dataset):
-    def __init__(self, paths_to_data, phase, transform=None, config=None, train=True):
+    def __init__(self, paths_to_data, phase, transform=None, config=None, train=True, return_cropped_original=True):
         self.phase = phase
         self.files = []
         self.cache = {}
@@ -277,7 +274,7 @@ class AEDataset(torch.utils.data.Dataset):
         logging.info(
             f"Loading the subset {phase} : {len(self.files)} files"
         )
-
+        self.return_cropped_original = return_cropped_original
         # Ignore warnings in obj loader
         o3d.utility.set_verbosity_level(o3d.utility.VerbosityLevel.Error)
 
@@ -316,20 +313,18 @@ class AEDataset(torch.utils.data.Dataset):
         quantized_coords, original_coords, feats = quantize_coordinates_with_feats(xyz, feats=feats,
                                                                                    resolution=self.resolution)
         if self.train:
-            coords, ori_coords, feats, rand_idx, max_range = random_crop(quantized_coords, original_coords, feats,
-                                                                         self.resolution)
+            coords_crop, feats_crop, coords_truth, feats_truth = random_crop(quantized_coords, feats, self.resolution)
             # print(coords.size())
             return (coords, ori_coords, feats, idx)
         else:
             return (quantized_coords, original_coords, feats, idx)
 
 
-def random_crop(coords, ori_coords, feats, resolution, partial_rate=0.8):
+def random_crop(coords, feats, resolution, partial_rate=0.8):
     """
     take 1/2 part of the object
     Args:
         coords:
-        ori_coords:
         feats:
         resolution:
 
@@ -357,10 +352,14 @@ def random_crop(coords, ori_coords, feats, resolution, partial_rate=0.8):
     sel_z = sel0_z * sel1_z
 
     sel = sel_x * sel_y * sel_z
-    coords_res, ori_coords_res, feats_res = coords[sel], ori_coords[sel], feats[sel]
-    if coords_res.shape[0] == 0:
-        return random_crop(coords, ori_coords, feats, resolution)
-    return coords_res, ori_coords_res, feats_res, rand_idx, max_range_x
+    coords_crop = coords[sel]
+    feats_crop = feats[sel]
+    coords_truth = coords
+    feats_truth = feats
+
+    if coords_crop.shape[0] < 100:
+        return random_crop(coords, feats, resolution, partial_rate)
+    return coords_crop, feats_crop, coords_truth, feats_truth
 
 
 def resample_mesh(mesh_cad, density=1):
@@ -458,15 +457,11 @@ class CollationAndTransformation:
             return crop_coords_list, crop_ori_coords_list
 
     def __call__(self, list_data):
-        if len(list_data[0]) == 4:
-            coords, ori_coords, feats, indx = list(zip(*list_data))
-            # coords, ori_coords, feats = self.random_crop((coords, ori_coords, feats))
-            item = construct_data_batch(coords, ori_coords, feats)
-        else:
-            coords, ori_coords, indx = list(zip(*list_data))
-            # coords, ori_coords = self.random_crop((coords, ori_coords))
-            item = construct_data_batch(coords, ori_coords)
-
+        coords_crop, feats_crop, coords_truth, feats_truth, indx = list(zip(*list_data))
+        item = construct_data_batch(coords_crop, feats_crop, coords_truth, feats_truth)
+        # else:
+        #     coords, ori_coords, indx = list(zip(*list_data))
+        #     item = construct_data_batch(coords, ori_coords)
         return item
 
 

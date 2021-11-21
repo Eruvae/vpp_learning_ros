@@ -103,6 +103,7 @@ def train(dataloader, device, config):
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.95)
 
     crit = nn.BCEWithLogitsLoss()
+    crit2 = nn.BCELoss()
 
     net.train()
     train_iter = iter(dataloader)
@@ -130,11 +131,16 @@ def train(dataloader, device, config):
         )
 
         # Generate from a dense tensor
-        out_cls, targets, sout = net(sin, target_key)
+        out_cls, out_label, targets, sout = net(sin, target_key)
         num_layers, loss = len(out_cls), 0
         losses = []
         for out_cl, target in zip(out_cls, targets):
             curr_loss = crit(out_cl.F.squeeze(), target.type(out_cl.F.dtype).to(device))
+            losses.append(curr_loss.item())
+            loss += curr_loss / num_layers
+
+        for out_lb, target in zip(out_label, targets):
+            curr_loss = crit2(out_lb.F.squeeze(), target.type(out_lb.F.dtype).to(device))
             losses.append(curr_loss.item())
             loss += curr_loss / num_layers
 
