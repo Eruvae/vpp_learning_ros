@@ -3,9 +3,7 @@
 using Cxx = import "/capnp/c++.capnp";
 $Cxx.namespace("vpp_msg");
 
-using import "pose.capnp".Point;
-
 struct Pointcloud {
-  points @0 :List(Float64);
-  labels @1 :List(Int64);
+  points @0 :List(Float32);
+  labels @1 :List(UInt8);
 }

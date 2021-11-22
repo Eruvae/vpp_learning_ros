@@ -5,6 +5,7 @@ $Cxx.namespace("vpp_msg");
 
 using import "pose.capnp".Pose;
 using import "pointcloud.capnp".Pointcloud;
+using import "voxelgrid.capnp".Voxelgrid;
 
 struct Observation {
   map :union {
@@ -18,6 +19,7 @@ struct Observation {
       layers @6 :UInt32;
     }
     pointcloud @13 :Pointcloud;
+    voxelgrid @14 :Voxelgrid;
   }
 
   foundRois @7 :UInt32;

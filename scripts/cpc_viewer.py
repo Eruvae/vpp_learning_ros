@@ -36,8 +36,16 @@ if len(sys.argv) < 2:
     print('File path not specified')
     sys.exit()
 
+legacy_mode = False
+if len(sys.argv) > 2 and sys.argv[2] == '--legacy':
+    legacy_mode = True
+    import pointcloud_old_capnp
+
 with open(sys.argv[1]) as file:
-    pointcloud = pointcloud_capnp.Pointcloud.read(file, traversal_limit_in_words=2**32)
+    if legacy_mode:
+        pointcloud = pointcloud_old_capnp.PointcloudOld.read(file, traversal_limit_in_words=2**32)
+    else:
+        pointcloud = pointcloud_capnp.Pointcloud.read(file, traversal_limit_in_words=2**32)
     points = np.asarray(pointcloud.points)
     labels = np.asarray(pointcloud.labels)
     points = points.reshape((len(labels), 3))

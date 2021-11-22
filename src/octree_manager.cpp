@@ -233,21 +233,21 @@ void OctreeManager::generatePointcloud(vpp_msg::Pointcloud::Builder &pc)
 {
   tree_mtx.lock();
   std::vector<octomap::point3d> points_vec;
-  std::vector<int64_t> labels_vec;
+  std::vector<uint8_t> labels_vec;
   for (auto it = planningTree->begin_leafs(), end = planningTree->end_leafs(); it != end; it++)
   {
     points_vec.push_back(it.getCoordinate());
     if (planningTree->isNodeROI(*it))
-      labels_vec.push_back(2);
+      labels_vec.push_back(2); // ROI
     else if (planningTree->isNodeOccupied(*it))
-      labels_vec.push_back(1);
+      labels_vec.push_back(1); // Occupied
     else
-      labels_vec.push_back(0);
+      labels_vec.push_back(0); // Free
 
   }
   tree_mtx.unlock();
-  capnp::List<double>::Builder points = pc.initPoints(points_vec.size() * 3);
-  capnp::List<int64_t>::Builder labels = pc.initLabels(labels_vec.size());
+  capnp::List<float>::Builder points = pc.initPoints(points_vec.size() * 3);
+  capnp::List<uint8_t>::Builder labels = pc.initLabels(labels_vec.size());
   for (size_t i = 0; i < points_vec.size(); i++)
   {
     points.set(i*3 + 0, points_vec[i].x());
@@ -255,6 +255,45 @@ void OctreeManager::generatePointcloud(vpp_msg::Pointcloud::Builder &pc)
     points.set(i*3 + 2, points_vec[i].z());
     labels.set(i, labels_vec[i]);
   }
+}
+
+void OctreeManager::generateVoxelgrid(vpp_msg::Voxelgrid::Builder &vx, const octomap::point3d &center_point, uint16_t vx_cells)
+{
+  capnp::List<uint8_t>::Builder labels = vx.initLabels(vx_cells*vx_cells*vx_cells);
+  capnp::List<uint16_t>::Builder shape = vx.initShape(3);
+  shape.set(0, vx_cells);
+  shape.set(1, vx_cells);
+  shape.set(2, vx_cells);
+  capnp::List<float>::Builder center = vx.initCenter(3);
+  center.set(0, center_point.x());
+  center.set(1, center_point.y());
+  center.set(2, center_point.z());
+
+  tree_mtx.lock();
+  vx.setResolution(planningTree->getResolution());
+  octomap::OcTreeKey center_key = planningTree->coordToKey(center_point);
+  octomap::OcTreeKey start_key(center_key[0] - vx_cells/2, center_key[1] - vx_cells/2, center_key[2] - vx_cells/2);
+  size_t linear_index = 0;
+  for (octomap::key_type z = start_key[2]; z < start_key[2] + vx_cells; z++)
+  {
+    for (octomap::key_type y = start_key[1]; y < start_key[1] + vx_cells; y++)
+    {
+      for (octomap::key_type x = start_key[0]; x < start_key[0] + vx_cells; x++)
+      {
+        octomap::OcTreeKey key(x, y, z);
+        octomap_vpp::RoiOcTreeNode *node = planningTree->search(key);
+        if (node == nullptr)
+          labels.set(linear_index++, 3); // unknown
+        else if (planningTree->isNodeROI(node))
+          labels.set(linear_index++, 2); // ROI
+        else if (planningTree->isNodeOccupied(node))
+          labels.set(linear_index++, 1); // Occupied
+        else
+          labels.set(linear_index++, 0); // Free
+      }
+    }
+  }
+  tree_mtx.unlock();
 }
 
 uint32_t OctreeManager::getReward()

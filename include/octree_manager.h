@@ -11,6 +11,7 @@
 #include "octomap_vpp/roioctree_utils.h"
 #include "observation.capnp.h"
 #include "pointcloud.capnp.h"
+#include "voxelgrid.capnp.h"
 #include <roi_viewpoint_planner/gt_octree_loader.h>
 #include <roi_viewpoint_planner/evaluator.h>
 
@@ -64,6 +65,8 @@ public:
   void fillCountMap(vpp_msg::Observation::Map::CountMap::Builder &cmap, const octomap::pose6d &viewpoint, size_t theta_steps, size_t phi_steps, size_t layers, double range);
 
   void generatePointcloud(vpp_msg::Pointcloud::Builder &pc);
+
+  void generateVoxelgrid(vpp_msg::Voxelgrid::Builder &vx, const octomap::point3d &center_point, uint16_t vx_cells);
 
   uint32_t getReward();
 

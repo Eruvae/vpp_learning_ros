@@ -138,6 +138,7 @@ int main(int argc, char **argv)
   config_mutex.unlock();
 
   tf2_ros::Buffer tfBuffer(ros::Duration(30));
+  tf2_ros::TransformListener tfListener(tfBuffer);
 
   OctreeManager oc_manager(nh, tfBuffer, map_frame, planner->getPlanningTree(), planner->getTreeMutex(), false);
 
@@ -157,8 +158,21 @@ int main(int argc, char **argv)
     }
     oc_manager.saveOctomap("octree_" + std::to_string(i), false);
 
-    capnp::MallocMessageBuilder builder;
-    vpp_msg::Pointcloud::Builder pc = builder.initRoot<vpp_msg::Pointcloud>();
+    // Get current camera pose
+    geometry_msgs::TransformStamped cur_tf;
+    try
+    {
+      cur_tf = tfBuffer.lookupTransform(map_frame, "camera_link", ros::Time(0));
+    }
+    catch (const tf2::TransformException &e)
+    {
+      ROS_ERROR_STREAM("Couldn't find transform to map frame: " << e.what());
+    }
+    octomap::pose6d cur_pose = octomap_vpp::transformToOctomath(cur_tf.transform);
+
+    // Write Pointcloud
+    capnp::MallocMessageBuilder pc_builder;
+    vpp_msg::Pointcloud::Builder pc = pc_builder.initRoot<vpp_msg::Pointcloud>();
     oc_manager.generatePointcloud(pc);
 
     const std::string pc_fname = "pointcloud_" + std::to_string(i) + ".cpc";
@@ -170,7 +184,24 @@ int main(int argc, char **argv)
     }
     //void writePackedMessageToFd(int fd, MessageBuilder& builder)
     //void writeMessageToFd(int fd, MessageBuilder& builder)
-    capnp::writeMessageToFd(fd, builder);
+    capnp::writeMessageToFd(fd, pc_builder);
+    close(fd);
+
+    // Write Voxelgrid
+    capnp::MallocMessageBuilder vx_builder;
+    vpp_msg::Voxelgrid::Builder vx = vx_builder.initRoot<vpp_msg::Voxelgrid>();
+    oc_manager.generateVoxelgrid(vx, cur_pose.trans(), 128);
+
+    const std::string vx_fname = "voxelgrid_" + std::to_string(i) + ".cvx";
+    fd = open(vx_fname.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if (fd < 0)
+    {
+      ROS_WARN("Couldn't create pointcloud file");
+      continue;
+    }
+    //void writePackedMessageToFd(int fd, MessageBuilder& builder)
+    //void writeMessageToFd(int fd, MessageBuilder& builder)
+    capnp::writeMessageToFd(fd, vx_builder);
     close(fd);
   }
 
