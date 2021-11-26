@@ -125,6 +125,7 @@ def train(dataloader, device, config):
         # Generate target sparse tensor
         cm = sin.coordinate_manager
         target_key, _ = cm.insert_and_map(
+
             coordinates=ME.utils.batched_coordinates(data_dict["tensor_batch_truth_coordinates"]).to(device),
             string_id="target",
         )

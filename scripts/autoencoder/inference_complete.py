@@ -41,7 +41,7 @@ parser.add_argument("--momentum", type=float, default=0.9)
 parser.add_argument("--weight_decay", type=float, default=1e-4)
 parser.add_argument("--num_workers", type=int, default=1)
 parser.add_argument("--stat_freq", type=int, default=50)
-parser.add_argument("--weights", type=str, default="modelnet_completion.pth")
+parser.add_argument("--weights", type=str, default="modelnet_completion_Nov_22.pth")
 parser.add_argument("--load_optimizer", type=str, default="true")
 parser.add_argument("--eval", action="store_true")
 parser.add_argument("--max_visualization", type=int, default=4)
@@ -59,7 +59,7 @@ def visualize_truth(data_dict, batch_ind):
     point = data_dict["tensor_batch_truth_coordinates"][batch_ind]
     label = data_dict["tensor_batch_truth_feats"][batch_ind].numpy().squeeze()
     opcd = PointCloud(point, np.array([SCANNET_COLOR_MAP[l] for l in label]))
-    opcd.translate([-1 * config.resolution, 0, 0])
+    opcd.translate([-2 * config.resolution, 0, 0])
     # opcd.estimate_normals()
     # opcd.rotate(M)
     return opcd
@@ -69,7 +69,7 @@ def visualize_input(data_dict, batch_ind):
     point = data_dict["tensor_batch_crop_coordinates"][batch_ind]
     label = data_dict["tensor_batch_crop_feats"][batch_ind].numpy().squeeze()
     opcd = PointCloud(point, np.array([SCANNET_COLOR_MAP[l] for l in label]))
-    opcd.translate([3 * config.resolution, 0, 0])
+    opcd.translate([2 * config.resolution, 0, 0])
     opcd.estimate_normals()
     # opcd.rotate(M)
     return opcd
@@ -82,7 +82,7 @@ def visualize_prediction(coords, feats=None):
         pcd = PointCloud(point, np.array([SCANNET_COLOR_MAP[l] for l in label]))
     else:
         pcd = PointCloud(point)
-    pcd.translate([4 * config.resolution, 0, 0])
+    pcd.translate([3 * config.resolution, 0, 0])
     pcd.estimate_normals()
     # pcd.rotate(M)
     return pcd

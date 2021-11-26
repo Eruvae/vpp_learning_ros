@@ -234,9 +234,11 @@ class AEDatasetWithFeatures(torch.utils.data.Dataset):
             points = np.reshape(np.array(pointcloud.points), (-1, 3))
             labels = np.array(pointcloud.labels)
             points_occ = points[np.where(labels != 0)]
-            labels = labels[np.where(labels != 0)]
+            labels_occ = labels[np.where(labels != 0)]
+            points_roi = points[np.where(labels != 0)]
+            labels_roi = labels[np.where(labels != 0)]
             if len(points_occ) >= 1000:
-                self.cache[len(self.cache)] = [points_occ, labels]
+                self.cache[len(self.cache)] = [points_occ, labels_occ]
                 print("Add file:{} into cache!".format(file))
             else:
                 print("File:{} too small!".format(file))

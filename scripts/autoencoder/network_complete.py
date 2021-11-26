@@ -490,20 +490,27 @@ class CompletionShadowNet(nn.Module):
     def get_target(self, out, target_key, kernel_size=1):
         with torch.no_grad():
             target = torch.zeros(len(out), dtype=torch.bool, device=out.device)
+            # target_label = torch.zeros(len(out), dtype=torch.bool, device=out.device)
+
             cm = out.coordinate_manager
             # 把 target 跳着取， 得到跳着取的健值， 相当于降采样
             strided_target_key = cm.stride(
                 target_key, out.tensor_stride[0],
             )
-            # 将out的
+            out_coordinate_map_key = out.coordinate_map_key
+            # construct mapping
             kernel_map = cm.kernel_map(
-                out.coordinate_map_key,
+                out_coordinate_map_key,
                 strided_target_key,
                 kernel_size=kernel_size,
                 region_type=1,
             )
             for k, curr_in in kernel_map.items():
-                target[curr_in[0].long()] = 1
+                input_row_indices = curr_in[0].long()
+                max_input = input_row_indices.max()
+                output_row_indices = curr_in[1].long()
+                target[input_row_indices] = 1
+                # target_label[input_row_indices] = out[input_row_indices]
         return target
 
     def valid_batch_map(self, batch_map):

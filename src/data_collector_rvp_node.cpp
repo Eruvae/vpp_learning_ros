@@ -141,7 +141,7 @@ int main(int argc, char **argv)
 
   OctreeManager oc_manager(nh, tfBuffer, map_frame, planner->getPlanningTree(), planner->getTreeMutex(), false);
 
-  const size_t NUM_SAMPLES_TO_COLLECT = 10;
+  const size_t NUM_SAMPLES_TO_COLLECT = 1000;
   const size_t NUM_TRIES_TO_MOVE = 10;
 
   for (size_t i=0; i<NUM_SAMPLES_TO_COLLECT && ros::ok(); i++)
