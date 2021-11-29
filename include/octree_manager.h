@@ -66,6 +66,8 @@ public:
 
   void generatePointcloud(vpp_msg::Pointcloud::Builder &pc);
 
+  void generatePointcloud(vpp_msg::Pointcloud::Builder &pc, const octomap::point3d &center_point, uint16_t vx_cells);
+
   void generateVoxelgrid(vpp_msg::Voxelgrid::Builder &vx, const octomap::point3d &center_point, uint16_t vx_cells);
 
   uint32_t getReward();

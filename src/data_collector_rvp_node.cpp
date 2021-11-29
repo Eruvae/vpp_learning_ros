@@ -127,6 +127,9 @@ int main(int argc, char **argv)
   std::string map_frame = nh.param<std::string>("/roi_viewpoint_planner/map_frame", "world");
   std::string ws_frame = nh.param<std::string>("/roi_viewpoint_planner/ws_frame", "arm_base_link");
 
+  bool limit_pointcloud = nhp.param<bool>("limit_pointcloud", true);
+  int vx_cells = nhp.param<int>("vx_cells", 128);
+
   planner = new roi_viewpoint_planner::ViewpointPlanner(nh, nhp, wstree_file, sampling_tree_file, tree_resolution, map_frame, ws_frame, true, false);
   config_server = new dynamic_reconfigure::Server<roi_viewpoint_planner::PlannerConfig>(config_mutex, nhp);
   config_server->setCallback(reconfigureCallback);
@@ -173,7 +176,10 @@ int main(int argc, char **argv)
     // Write Pointcloud
     capnp::MallocMessageBuilder pc_builder;
     vpp_msg::Pointcloud::Builder pc = pc_builder.initRoot<vpp_msg::Pointcloud>();
-    oc_manager.generatePointcloud(pc);
+    if (limit_pointcloud)
+      oc_manager.generatePointcloud(pc, cur_pose.trans(), vx_cells);
+    else
+      oc_manager.generatePointcloud(pc);
 
     const std::string pc_fname = "pointcloud_" + std::to_string(i) + ".cpc";
     int fd = open(pc_fname.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0666);
@@ -190,7 +196,7 @@ int main(int argc, char **argv)
     // Write Voxelgrid
     capnp::MallocMessageBuilder vx_builder;
     vpp_msg::Voxelgrid::Builder vx = vx_builder.initRoot<vpp_msg::Voxelgrid>();
-    oc_manager.generateVoxelgrid(vx, cur_pose.trans(), 128);
+    oc_manager.generateVoxelgrid(vx, cur_pose.trans(), vx_cells);
 
     const std::string vx_fname = "voxelgrid_" + std::to_string(i) + ".cvx";
     fd = open(vx_fname.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0666);
