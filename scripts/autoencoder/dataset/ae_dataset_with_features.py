@@ -10,7 +10,7 @@ import MinkowskiEngine as ME
 import capnp
 
 from autoencoder.dataset.ae_dataset import CollationAndTransformation, random_crop
-from autoencoder.dataset.data_reader import InfSampler
+from autoencoder.dataset.data_reader import InfSampler, normalize
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../..', "capnp"))
 import pointcloud_capnp
@@ -43,7 +43,7 @@ class AEDatasetWithFeatures(torch.utils.data.Dataset):
             labels = np.array(pointcloud.labels)
             # points_roi = points[np.where(labels == 2)]
             # labels_roi = labels[np.where(labels == 2)]
-
+            # points = normalize(points)
             points_roi = points[np.where(labels != 0)]
             labels_roi = labels[np.where(labels != 0)]
 
