@@ -28,12 +28,10 @@ import argparse
 import logging
 import numpy as np
 from time import time
-import urllib
 
 # Must be imported before large libs
-from autoencoder.ae_dataset import make_data_loader, make_data_loader_with_features
-from autoencoder.network_vae import VAE
-from network_complete import CompletionShadowNet
+from autoencoder.dataset.ae_dataset import make_data_loader_with_features
+from autoencoder.network.vae_network import CompletionVAEShadowNet
 
 try:
     import open3d as o3d
@@ -81,7 +79,7 @@ parser.add_argument("--momentum", type=float, default=0.9)
 parser.add_argument("--weight_decay", type=float, default=1e-4)
 parser.add_argument("--num_workers", type=int, default=1)
 parser.add_argument("--stat_freq", type=int, default=50)
-parser.add_argument("--weights", type=str, default="modelnet_completion.pth")
+parser.add_argument("--weights", type=str, default="modelnet_completion_vae.pth")
 parser.add_argument("--load_optimizer", type=str, default="true")
 parser.add_argument("--eval", action="store_true")
 parser.add_argument("--max_visualization", type=int, default=4)
@@ -91,7 +89,7 @@ parser.add_argument("--max_visualization", type=int, default=4)
 # End of utility functions
 ###############################################################################
 def train(dataloader, device, config):
-    net = CompletionShadowNet().to(device)
+    net = CompletionVAEShadowNet().to(device)
     logging.info(net)
 
     optimizer = optim.SGD(
@@ -126,7 +124,7 @@ def train(dataloader, device, config):
         cm = sin.coordinate_manager
         target_key, _ = cm.insert_and_map(
 
-            coordinates=ME.utils.batched_coordinates(data_dict["tensor_batch_truth_coordinates"]).to(device),
+            coordinates=ME.utils.batched_coordinates(data_dict["tensor_batch_crop_coordinates"]).to(device),
             string_id="target",
         )
 

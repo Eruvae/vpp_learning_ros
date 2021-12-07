@@ -28,12 +28,11 @@ import argparse
 import logging
 import numpy as np
 from time import time
-import urllib
 
 # Must be imported before large libs
-from autoencoder.ae_dataset import make_data_loader, make_data_loader_with_features
-from autoencoder.network_vae import VAE
-from network_complete import CompletionShadowNet
+from autoencoder.dataset.ae_dataset import make_data_loader_with_features
+from autoencoder.network.vae_network import CompletionVAEShadowNet
+from autoencoder.network.mink_unet34 import MinkUNetBase, MinkUNet34
 
 try:
     import open3d as o3d
@@ -72,7 +71,7 @@ logging.basicConfig(
 )
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--resolution", type=int, default=128)
+parser.add_argument("--resolution", type=int, default=64)
 parser.add_argument("--max_iter", type=int, default=30000)
 parser.add_argument("--val_freq", type=int, default=100)
 parser.add_argument("--batch_size", default=16, type=int)
@@ -81,7 +80,7 @@ parser.add_argument("--momentum", type=float, default=0.9)
 parser.add_argument("--weight_decay", type=float, default=1e-4)
 parser.add_argument("--num_workers", type=int, default=1)
 parser.add_argument("--stat_freq", type=int, default=50)
-parser.add_argument("--weights", type=str, default="modelnet_completion.pth")
+parser.add_argument("--weights", type=str, default="modelnet_features.pth")
 parser.add_argument("--load_optimizer", type=str, default="true")
 parser.add_argument("--eval", action="store_true")
 parser.add_argument("--max_visualization", type=int, default=4)
@@ -91,7 +90,8 @@ parser.add_argument("--max_visualization", type=int, default=4)
 # End of utility functions
 ###############################################################################
 def train(dataloader, device, config):
-    net = CompletionShadowNet().to(device)
+    net = MinkUNet34(2, 2).to(device)
+
     logging.info(net)
 
     optimizer = optim.SGD(
@@ -103,7 +103,6 @@ def train(dataloader, device, config):
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.95)
 
     crit = nn.BCEWithLogitsLoss()
-    crit2 = nn.BCELoss()
 
     net.train()
     train_iter = iter(dataloader)
@@ -129,20 +128,22 @@ def train(dataloader, device, config):
             coordinates=ME.utils.batched_coordinates(data_dict["tensor_batch_truth_coordinates"]).to(device),
             string_id="target",
         )
-
         # Generate from a dense tensor
-        out_cls, out_label, targets, sout = net(sin, target_key)
-        num_layers, loss = len(out_cls), 0
-        losses = []
-        for out_cl, target in zip(out_cls, targets):
-            curr_loss = crit(out_cl.F.squeeze(), target.type(out_cl.F.dtype).to(device))
-            losses.append(curr_loss.item())
-            loss += curr_loss / num_layers
+        # sinput = in_field.sparse()
+        # Output sparse tensor
+        sout = net(sin)
+        # get the prediction on the input tensor field
+        # out_field = soutput.slice(in_field)
+        out_feature = sout.F
+        target_feature = data_dict["crop_feats"]
+        loss = crit(out_feature, target_feature.to(device))
 
-        for out_lb, target in zip(out_label, targets):
-            curr_loss = crit2(out_lb.F.squeeze(), target.type(out_lb.F.dtype).to(device))
-            losses.append(curr_loss.item())
-            loss += curr_loss / num_layers
+        # num_layers, loss = len(out_cls), 0
+        # losses = []
+        # for out_cl, target in zip(out_cls, targets):
+        #     curr_loss = crit(out_cl.F.squeeze(), target.type(out_cl.F.dtype).to(device))
+        #     losses.append(curr_loss.item())
+        #     loss += curr_loss / num_layers
 
         loss.backward()
         optimizer.step()
@@ -182,6 +183,7 @@ if __name__ == "__main__":
     #                  "/media/zeng/Data/dataset/ModelNet40/chair/train/*.off"]
 
     paths_to_data = ["/home/zeng/catkin_ws/data/try_02/*.cpc"]
+
     dataloader = make_data_loader_with_features(
         paths_to_data,
         "train",

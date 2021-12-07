@@ -28,9 +28,7 @@ import subprocess
 import argparse
 import logging
 
-import numpy as np
-
-from autoencoder.ae_dataset import load_batches_points_labels_from_pickle
+from autoencoder.dataset.ae_dataset import load_batches_points_labels_from_pickle
 from autoencoder.inference import inference_one_live
 from autoencoder.network_complete import CompletionShadowNet
 from vpp_env_client import EnvironmentClient
@@ -40,12 +38,7 @@ try:
 except ImportError:
     raise ImportError("Please install open3d with `pip install open3d`.")
 
-import torch
-import torch.nn as nn
 import torch.utils.data
-import torch.optim as optim
-
-import MinkowskiEngine as ME
 
 assert (
         int(o3d.__version__.split(".")[1]) >= 8

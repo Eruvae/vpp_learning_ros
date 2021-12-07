@@ -1,16 +1,12 @@
 import os
-import sys
-import subprocess
 import argparse
 import logging
 import numpy as np
-from time import time
 import urllib
 
 # Must be imported before large libs
-from autoencoder.ae_dataset import make_data_loader, make_data_loader_with_features, PointCloud
-from autoencoder.network_vae import VAE
-from network_complete import CompletionShadowNet
+from autoencoder.dataset.ae_dataset import make_data_loader, PointCloud
+from autoencoder.network.network_vae import VAE
 
 try:
     import open3d as o3d
@@ -20,7 +16,6 @@ except ImportError:
 import torch
 import torch.nn as nn
 import torch.utils.data
-import torch.optim as optim
 
 import MinkowskiEngine as ME
 

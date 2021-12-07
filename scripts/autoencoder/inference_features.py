@@ -2,19 +2,18 @@ import os
 import argparse
 import logging
 import numpy as np
-import urllib
 
-# Must be imported before large libs
-from autoencoder.dataset.ae_dataset import make_data_loader_with_features, PointCloud
-from autoencoder.network.completion_network import CompletionShadowNet
-from autoencoder.network.vae_network import CompletionVAEShadowNet
+from autoencoder.dataset.ae_dataset_with_features import make_data_loader_with_features
+from autoencoder.dataset.data_reader import PointCloud
+from autoencoder.network.mink_unet34 import MinkUNet34
+from matplotlib import pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 try:
     import open3d as o3d
 except ImportError:
     raise ImportError("Please install open3d with `pip install open3d`.")
 
-import torch.nn as nn
 import torch.utils.data
 
 import MinkowskiEngine as ME
@@ -27,7 +26,7 @@ M = np.array(
     ]
 )
 parser = argparse.ArgumentParser()
-parser.add_argument("--resolution", type=int, default=128)
+parser.add_argument("--resolution", type=int, default=64)
 parser.add_argument("--max_iter", type=int, default=30000)
 parser.add_argument("--val_freq", type=int, default=100)
 parser.add_argument("--batch_size", default=16, type=int)
@@ -36,7 +35,9 @@ parser.add_argument("--momentum", type=float, default=0.9)
 parser.add_argument("--weight_decay", type=float, default=1e-4)
 parser.add_argument("--num_workers", type=int, default=1)
 parser.add_argument("--stat_freq", type=int, default=50)
-parser.add_argument("--weights", type=str, default="modelnet_completion_vae.pth")
+# parser.add_argument("--weights", type=str, default="modelnet_completion_vae_Nov_30.pth")
+parser.add_argument("--weights", type=str, default="modelnet_features.pth")
+
 parser.add_argument("--load_optimizer", type=str, default="true")
 parser.add_argument("--eval", action="store_true")
 parser.add_argument("--max_visualization", type=int, default=4)
@@ -83,9 +84,30 @@ def visualize_prediction(coords, feats=None):
     return pcd
 
 
+def visualize_hidden_code(batch_code_coord, batch_code_feats):
+    codes = []
+    for coords, feats in zip(batch_code_coord, batch_code_feats):
+        coords = coords.numpy()
+        feats = feats.numpy()
+        code = np.zeros(shape=(config.resolution, config.resolution, config.resolution, 256))
+        for coord, feat in zip(coords, feats):
+            code[coord] = feat
+            codes.append(code)
+        x = coords[:, 0]
+        y = coords[:, 1]
+        z = coords[:, 2]
+        feat = feats[:, 0]
+        fig = plt.figure()
+        ax = Axes3D(fig)
+        ax.scatter3D(x, y, z, feat)
+        plt.show()
+        print("")
+
+    return np.array(codes)
+
+
 def visualize(net, dataloader, device, config):
     net.eval()
-    crit = nn.BCEWithLogitsLoss()
     n_vis = 0
 
     for data_dict in dataloader:
@@ -99,28 +121,20 @@ def visualize(net, dataloader, device, config):
         # Generate target sparse tensor
         cm = sin.coordinate_manager
         target_key, _ = cm.insert_and_map(
-            coordinates=ME.utils.batched_coordinates(data_dict["tensor_batch_crop_coordinates"]).to(device),
+            coordinates=ME.utils.batched_coordinates(data_dict["tensor_batch_truth_coordinates"]).to(device),
             string_id="target",
         )
 
-        out_cls, targets, sout = net(sin, target_key)
-        num_layers, loss = len(out_cls), 0
-        losses = []
-        for out_cl, target in zip(out_cls, targets):
-            a1 = out_cl.F.squeeze()
-            a2 = target.type(out_cl.F.dtype).to(device)
-            curr_loss = crit(a1, a2)
-            losses.append(curr_loss.item())
-            loss += curr_loss / num_layers
-
-        print(loss)
-
+        code, sout = net(sin)
+        batch_code_coord, batch_code_feats = code.decomposed_coordinates_and_features
+        # visualize_hidden_code(batch_code_coord, batch_code_feats)
         batch_coords, batch_feats = sout.decomposed_coordinates_and_features
-        # batch_coords2, cls = out_cls.decomposed_coordinates_and_features
+
         for b, (coords, feats) in enumerate(zip(batch_coords, batch_feats)):
             pcd_input = visualize_input(data_dict, b)
             pcd_truth = visualize_truth(data_dict, b)
-            pcd = visualize_prediction(coords)
+            _, feats = feats.max(1)
+            pcd = visualize_prediction(coords, feats)
             o3d.visualization.draw_geometries([pcd_input, pcd_truth, pcd])
 
             n_vis += 1
@@ -128,17 +142,17 @@ def visualize(net, dataloader, device, config):
                 return
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     config = parser.parse_args()
+    # config.weights = "modelnet_completion_vae_Nov_26.pth"
     logging.info(config)
     # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     device = torch.device("cpu")
-    net = CompletionVAEShadowNet().to(device)
+    net = MinkUNet34(2, 2).to(device)
 
     logging.info(net)
 
     logging.info(f"Loading weights from {config.weights}")
-    print(os.path.exists(config.weights))
     checkpoint = torch.load(config.weights)
     net.load_state_dict(checkpoint["state_dict"])
 

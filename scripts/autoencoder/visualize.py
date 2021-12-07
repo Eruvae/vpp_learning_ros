@@ -1,7 +1,7 @@
 import numpy as np
 
 # Must be imported before large libs
-from autoencoder.ae_dataset import PointCloud
+from autoencoder.dataset.ae_dataset import PointCloud
 
 try:
     import open3d as o3d
