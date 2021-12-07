@@ -1,17 +1,14 @@
 import os
 import sys
-
-import pickle
 import random
 import logging
 import glob
-import numpy as np
-
 from torch.utils.data.sampler import Sampler
 import torch
 import torch.utils.data
 import MinkowskiEngine as ME
-import capnp
+
+from autoencoder.dataset.data_reader import load_mesh_file, load_pcd_file, InfSampler
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../..', "capnp"))
 import pointcloud_capnp
@@ -54,8 +51,6 @@ def quantize_coordinates(xyz, resolution):
     quantized_coords, inds = ME.utils.sparse_quantize(xyz, return_index=True)
     original_coords = xyz[inds]
     return quantized_coords, original_coords
-
-
 
 
 def make_data_loader(paths_to_data, phase, augment_data, batch_size, shuffle, num_workers, repeat, config, train,
@@ -226,5 +221,3 @@ class CollationAndTransformation:
         #     coords, ori_coords, indx = list(zip(*list_data))
         #     item = construct_data_batch(coords, ori_coords)
         return item
-
-

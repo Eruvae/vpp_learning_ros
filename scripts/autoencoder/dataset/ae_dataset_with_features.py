@@ -1,9 +1,5 @@
 import os
 import sys
-
-import pickle
-import random
-import logging
 import glob
 import numpy as np
 
@@ -39,6 +35,8 @@ class AEDatasetWithFeatures(torch.utils.data.Dataset):
         for file_path in self.files:
             file = open(file_path, 'rb')
             pointcloud = pointcloud_capnp.Pointcloud.read(file, traversal_limit_in_words=2 ** 63)
+
+            # TODO normalize
             # points = np.reshape(np.array(pointcloud.points), (-1, 3))
             # labels = np.array(pointcloud.labels).tolist()
             points = np.reshape(np.array(pointcloud.points), (-1, 3))
