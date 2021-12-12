@@ -207,6 +207,11 @@ int main(int argc, char **argv)
         vpp_msg::Pointcloud::Builder pc = obs.initMap().initPointcloud();
         oc_manager.generatePointcloud(pc);
       }
+      else if (map_type == vpp_msg::MapType::VOXELGRID)
+      {
+        vpp_msg::Voxelgrid::Builder vx = obs.initMap().initVoxelgrid();
+        oc_manager.generateVoxelgrid(vx, cur_pose.trans(), 128);
+      }
 
       vpp_msg::Pose::Builder pose_msg = obs.initRobotPose();
       toActionMsg(pose_msg, cur_tf.transform);

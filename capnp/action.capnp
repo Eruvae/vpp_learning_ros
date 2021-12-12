@@ -10,6 +10,7 @@ enum MapType {
   unchanged @0;
   countMap @1;
   pointcloud @2;
+  voxelgrid @3;
 }
 
 struct Action {
