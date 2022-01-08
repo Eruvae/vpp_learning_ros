@@ -1,6 +1,8 @@
 import os
 import argparse
 import logging
+import time
+
 import numpy as np
 
 from autoencoder.dataset.ae_dataset_with_features import make_data_loader_with_features
@@ -26,7 +28,7 @@ M = np.array(
     ]
 )
 parser = argparse.ArgumentParser()
-parser.add_argument("--resolution", type=int, default=64)
+parser.add_argument("--resolution", type=int, default=32)
 parser.add_argument("--max_iter", type=int, default=30000)
 parser.add_argument("--val_freq", type=int, default=100)
 parser.add_argument("--batch_size", default=16, type=int)
@@ -36,7 +38,7 @@ parser.add_argument("--weight_decay", type=float, default=1e-4)
 parser.add_argument("--num_workers", type=int, default=1)
 parser.add_argument("--stat_freq", type=int, default=50)
 # parser.add_argument("--weights", type=str, default="modelnet_completion_vae_Nov_30.pth")
-parser.add_argument("--weights", type=str, default="modelnet_features.pth")
+parser.add_argument("--weights", type=str, default="modelnet_features_DEC13.pth")
 
 parser.add_argument("--load_optimizer", type=str, default="true")
 parser.add_argument("--eval", action="store_true")
@@ -50,6 +52,10 @@ SCANNET_COLOR_MAP = {
     3: (31., 119., 180.)
 }
 
+#{0,0,255},
+# {255,0,0},
+# {0,255,0},
+# {0,0,51}
 
 def visualize_truth(data_dict, batch_ind):
     point = data_dict["tensor_batch_truth_coordinates"][batch_ind]
@@ -61,11 +67,24 @@ def visualize_truth(data_dict, batch_ind):
     return opcd
 
 
+def visualize_truth2(data_dict, batch_ind):
+    point = data_dict["tensor_batch_truth_coordinates"][batch_ind]
+    label = data_dict["tensor_batch_truth_feats"][batch_ind].numpy().squeeze()
+    point = point[label.argmax(1) != 0]
+    label = label[label.argmax(1) != 0]
+
+    opcd = PointCloud(point, np.array([SCANNET_COLOR_MAP[l.argmax()] for l in label]))
+    opcd.translate([-4 * config.resolution, 0, 0])
+    # opcd.estimate_normals()
+    # opcd.rotate(M)
+    return opcd
+
+
 def visualize_input(data_dict, batch_ind):
     point = data_dict["tensor_batch_crop_coordinates"][batch_ind]
     label = data_dict["tensor_batch_crop_feats"][batch_ind].numpy().squeeze()
     opcd = PointCloud(point, np.array([SCANNET_COLOR_MAP[l.argmax()] for l in label]))
-    opcd.translate([2 * config.resolution, 0, 0])
+    opcd.translate([0 * config.resolution, 0, 0])
     opcd.estimate_normals()
     # opcd.rotate(M)
     return opcd
@@ -78,7 +97,7 @@ def visualize_prediction(coords, feats=None):
         pcd = PointCloud(point, np.array([SCANNET_COLOR_MAP[l] for l in label]))
     else:
         pcd = PointCloud(point)
-    pcd.translate([3 * config.resolution, 0, 0])
+    pcd.translate([2 * config.resolution, 0, 0])
     pcd.estimate_normals()
     # pcd.rotate(M)
     return pcd
@@ -111,7 +130,7 @@ def visualize(net, dataloader, device, config):
     n_vis = 0
 
     for data_dict in dataloader:
-
+        start_time = time.time()
         sin = ME.SparseTensor(
             features=data_dict["crop_feats"],
             coordinates=ME.utils.batched_coordinates(data_dict["tensor_batch_crop_coordinates"]),
@@ -126,6 +145,7 @@ def visualize(net, dataloader, device, config):
         )
 
         code, sout = net(sin)
+        print("inference time:{}".format(time.time() - start_time))
         batch_code_coord, batch_code_feats = code.decomposed_coordinates_and_features
         # visualize_hidden_code(batch_code_coord, batch_code_feats)
         batch_coords, batch_feats = sout.decomposed_coordinates_and_features
@@ -133,9 +153,10 @@ def visualize(net, dataloader, device, config):
         for b, (coords, feats) in enumerate(zip(batch_coords, batch_feats)):
             pcd_input = visualize_input(data_dict, b)
             pcd_truth = visualize_truth(data_dict, b)
+            pcd_truth2 = visualize_truth2(data_dict, b)
             _, feats = feats.max(1)
             pcd = visualize_prediction(coords, feats)
-            o3d.visualization.draw_geometries([pcd_input, pcd_truth, pcd])
+            o3d.visualization.draw_geometries([pcd_input, pcd_truth, pcd_truth2, pcd])
 
             n_vis += 1
             if n_vis > config.max_visualization:
@@ -148,7 +169,7 @@ if __name__ == '__main__':
     logging.info(config)
     # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     device = torch.device("cpu")
-    net = MinkUNet34(2, 2).to(device)
+    net = MinkUNet34(4, 4).to(device)
 
     logging.info(net)
 
@@ -159,7 +180,7 @@ if __name__ == '__main__':
     # paths_to_data = ["/media/zeng/Data/dataset/Pheno4D/*/*.pcd",
     #                  "/media/zeng/Data/dataset/ModelNet40/chair/train/*.off"]
 
-    paths_to_data = ["/home/zeng/catkin_ws/data/test/*.cpc"]
+    paths_to_data = ["/home/zeng/catkin_ws/data/data_cvx_test2/*.cvx"]
     dataloader = make_data_loader_with_features(
         paths_to_data,
         "train",

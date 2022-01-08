@@ -30,7 +30,7 @@ import numpy as np
 from time import time
 
 # Must be imported before large libs
-from autoencoder.dataset.ae_dataset import make_data_loader_with_features
+from autoencoder.dataset.ae_dataset_with_features import make_data_loader_with_features
 from autoencoder.network.vae_network import CompletionVAEShadowNet
 from autoencoder.network.mink_unet34 import MinkUNetBase, MinkUNet34
 
@@ -71,7 +71,7 @@ logging.basicConfig(
 )
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--resolution", type=int, default=64)
+parser.add_argument("--resolution", type=int, default=16)
 parser.add_argument("--max_iter", type=int, default=30000)
 parser.add_argument("--val_freq", type=int, default=100)
 parser.add_argument("--batch_size", default=16, type=int)
@@ -90,7 +90,7 @@ parser.add_argument("--max_visualization", type=int, default=4)
 # End of utility functions
 ###############################################################################
 def train(dataloader, device, config):
-    net = MinkUNet34(2, 2).to(device)
+    net = MinkUNet34(4, 4).to(device)
 
     logging.info(net)
 
@@ -131,7 +131,7 @@ def train(dataloader, device, config):
         # Generate from a dense tensor
         # sinput = in_field.sparse()
         # Output sparse tensor
-        sout = net(sin)
+        code, sout = net(sin)
         # get the prediction on the input tensor field
         # out_field = soutput.slice(in_field)
         out_feature = sout.F
@@ -182,7 +182,7 @@ if __name__ == "__main__":
     # paths_to_data = ["/media/zeng/Data/dataset/Pheno4D/*/*.pcd",
     #                  "/media/zeng/Data/dataset/ModelNet40/chair/train/*.off"]
 
-    paths_to_data = ["/home/zeng/catkin_ws/data/try_02/*.cpc"]
+    paths_to_data = ["/home/zeng/catkin_ws/data/data_cvx/*.cvx"]
 
     dataloader = make_data_loader_with_features(
         paths_to_data,
