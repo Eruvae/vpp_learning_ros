@@ -28,7 +28,7 @@ M = np.array(
     ]
 )
 parser = argparse.ArgumentParser()
-parser.add_argument("--resolution", type=int, default=32)
+parser.add_argument("--resolution", type=int, default=16)
 parser.add_argument("--max_iter", type=int, default=30000)
 parser.add_argument("--val_freq", type=int, default=100)
 parser.add_argument("--batch_size", default=16, type=int)
@@ -38,7 +38,7 @@ parser.add_argument("--weight_decay", type=float, default=1e-4)
 parser.add_argument("--num_workers", type=int, default=1)
 parser.add_argument("--stat_freq", type=int, default=50)
 # parser.add_argument("--weights", type=str, default="modelnet_completion_vae_Nov_30.pth")
-parser.add_argument("--weights", type=str, default="modelnet_features_DEC13.pth")
+parser.add_argument("--weights", type=str, default="modelnet_features.pth")
 
 parser.add_argument("--load_optimizer", type=str, default="true")
 parser.add_argument("--eval", action="store_true")
@@ -52,7 +52,8 @@ SCANNET_COLOR_MAP = {
     3: (31., 119., 180.)
 }
 
-#{0,0,255},
+
+# {0,0,255},
 # {255,0,0},
 # {0,255,0},
 # {0,0,51}
@@ -103,28 +104,6 @@ def visualize_prediction(coords, feats=None):
     return pcd
 
 
-def visualize_hidden_code(batch_code_coord, batch_code_feats):
-    codes = []
-    for coords, feats in zip(batch_code_coord, batch_code_feats):
-        coords = coords.numpy()
-        feats = feats.numpy()
-        code = np.zeros(shape=(config.resolution, config.resolution, config.resolution, 256))
-        for coord, feat in zip(coords, feats):
-            code[coord] = feat
-            codes.append(code)
-        x = coords[:, 0]
-        y = coords[:, 1]
-        z = coords[:, 2]
-        feat = feats[:, 0]
-        fig = plt.figure()
-        ax = Axes3D(fig)
-        ax.scatter3D(x, y, z, feat)
-        plt.show()
-        print("")
-
-    return np.array(codes)
-
-
 def visualize(net, dataloader, device, config):
     net.eval()
     n_vis = 0
@@ -146,7 +125,13 @@ def visualize(net, dataloader, device, config):
 
         code, sout = net(sin)
         print("inference time:{}".format(time.time() - start_time))
-        batch_code_coord, batch_code_feats = code.decomposed_coordinates_and_features
+
+        # -----------------这一段是要用的特征
+        coordinates = code.coordinates.numpy()[:, 0]
+        index = coordinates.argsort()
+        features = code.features.numpy()[index]
+        # ---------------------------
+        # batch_code_coord, batch_code_feats = code.decomposed_coordinates_and_features
         # visualize_hidden_code(batch_code_coord, batch_code_feats)
         batch_coords, batch_feats = sout.decomposed_coordinates_and_features
 

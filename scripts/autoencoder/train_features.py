@@ -102,7 +102,8 @@ def train(dataloader, device, config):
     )
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.95)
 
-    crit = nn.BCEWithLogitsLoss()
+    weight = torch.Tensor(np.array([1 / 84, 1 / 15, 1 / 1, 1 / 125]))
+    crit = nn.BCEWithLogitsLoss(weight=weight)
 
     net.train()
     train_iter = iter(dataloader)
@@ -149,10 +150,10 @@ def train(dataloader, device, config):
         optimizer.step()
         t = time() - s
 
-        if i % config.stat_freq == 0:
-            logging.info(
-                f"Iter: {i}, Loss: {loss.item():.3e}, Data Loading Time: {d:.3e}, Tot Time: {t:.3e}"
-            )
+        # if i % config.stat_freq == 0:
+        logging.info(
+            f"Iter: {i}, Loss: {loss.item():.3e}, Data Loading Time: {d:.3e}, Tot Time: {t:.3e}"
+        )
 
         if i % config.val_freq == 0 and i > 0:
             torch.save(
@@ -183,6 +184,7 @@ if __name__ == "__main__":
     #                  "/media/zeng/Data/dataset/ModelNet40/chair/train/*.off"]
 
     paths_to_data = ["/home/zeng/catkin_ws/data/data_cvx/*.cvx"]
+    # paths_to_data = ["/home/zeng/catkin_ws/data/data_cvx_test2/*.cvx"]
 
     dataloader = make_data_loader_with_features(
         paths_to_data,

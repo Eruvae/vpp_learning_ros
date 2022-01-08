@@ -31,8 +31,11 @@ class AEDatasetWithFeatures(torch.utils.data.Dataset):
             fnames.extend(glob.glob(paths_to_data))
         self.files = fnames
         self.return_cropped_original = return_cropped_original
-
-        # loading into cache
+        # label0count = 0
+        # label1count = 0
+        # label2count = 0
+        # label3count = 0
+        # # loading into cache
         for file_path in self.files:
             file = open(file_path, 'rb')
             if file_path.endswith("cpc"):
@@ -52,6 +55,11 @@ class AEDatasetWithFeatures(torch.utils.data.Dataset):
                             points.append([i, j, k])
                 points = np.array(points)
                 labels = np.array(voxelgrid.labels)
+                # label0count += np.sum(labels == 0)
+                # label1count += np.sum(labels == 1)
+                # label2count += np.sum(labels == 2)
+                # label3count += np.sum(labels == 3)
+
                 labels_roi_one_hot = to_one_hot(labels, class_num=4)
             # TODO normalize
             # points = np.reshape(np.array(pointcloud.points), (-1, 3))
