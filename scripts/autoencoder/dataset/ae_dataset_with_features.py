@@ -1,4 +1,5 @@
 import os
+import random
 import sys
 import glob
 import numpy as np
@@ -9,7 +10,6 @@ import torch.utils.data
 import MinkowskiEngine as ME
 import capnp
 
-from autoencoder.dataset.ae_dataset import CollationAndTransformation, random_crop
 from autoencoder.dataset.data_reader import InfSampler, normalize
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../..', "capnp"))
@@ -19,18 +19,15 @@ import voxelgrid_capnp
 
 class AEDatasetWithFeatures(torch.utils.data.Dataset):
     # TODO 改这个地方
-    def __init__(self, paths_to_data, phase, transform=None, config=None, crop=False, return_cropped_original=True):
-        self.phase = phase
+    def __init__(self, config=None):
+        self.phase = config.phase
         self.cache = {}
-        self.transform = transform
         self.resolution = config.resolution
-        self.crop = crop
         # load from path
         fnames = []
-        for paths_to_data in paths_to_data:
+        for paths_to_data in config.paths_to_data:
             fnames.extend(glob.glob(paths_to_data))
         self.files = fnames
-        self.return_cropped_original = return_cropped_original
         # label0count = 0
         # label1count = 0
         # label2count = 0
@@ -94,6 +91,24 @@ class AEDatasetWithFeatures(torch.utils.data.Dataset):
         return coords, feats, coords, feats, idx
 
 
+def load_one_sample(voxelgrid, config):
+    shape = np.array(voxelgrid.shape)
+    points = []
+    for i in range(shape[0]):
+        for j in range(shape[1]):
+            for k in range(shape[2]):
+                points.append([i, j, k])
+    points = np.array(points)
+    labels = np.array(voxelgrid.labels)
+    labels = to_one_hot(labels, class_num=4)
+
+    points = normalize(points)
+    coords, _, feats = quantize_coordinates_with_feats(points, feats=labels,
+                                                       resolution=config.resolution)
+    data_batch_dict = construct_data_batch(coords, feats, coords, feats)
+    return data_batch_dict
+
+
 def quantize_coordinates_with_feats(xyz, feats, resolution):
     """
 
@@ -128,24 +143,79 @@ def to_one_hot(indexes, class_num):
     return np.array(one_hot_)
 
 
-def make_data_loader_with_features(paths_to_data, phase, augment_data, batch_size, shuffle, num_workers, repeat, config,
-                                   crop):
-    dset = AEDatasetWithFeatures(paths_to_data, phase, config=config, crop=crop)
+def make_data_loader_with_features(config):
+    dset = AEDatasetWithFeatures(config)
     print("dataset size:{}".format(len(dset)))
 
     args = {
-        "batch_size": batch_size,
-        "num_workers": num_workers,
+        "batch_size": config.batch_size,
+        "num_workers": config.num_workers,
         "collate_fn": CollationAndTransformation(config.resolution),
         "pin_memory": False,
         "drop_last": False,
     }
 
-    if repeat:
-        args["sampler"] = InfSampler(dset, shuffle)
+    if config.repeat:
+        args["sampler"] = InfSampler(dset, config.shuffle)
     else:
-        args["shuffle"] = shuffle
+        args["shuffle"] = config.shuffle
 
     loader = torch.utils.data.DataLoader(dset, **args)
 
     return loader
+
+
+class CollationAndTransformation:
+    def __init__(self, resolution):
+        self.resolution = resolution
+
+    def random_crop(self, data_list):
+        # coords_list, ori_coords_list, feats_list = data_list
+        # coords_list, ori_coords_list = data_list
+        crop_coords_list = []
+        crop_ori_coords_list = []
+        crop_feats_list = []
+        if len(data_list) == 3:
+            for coords, ori_coords, feats in zip(*data_list):
+                rand_idx = random.randint(0, int(self.resolution * 0.66))
+                sel0 = coords[:, 0] > rand_idx
+                max_range = self.resolution / 3 + rand_idx
+                sel1 = coords[:, 0] < max_range
+                sel = sel0 * sel1
+                crop_coords_list.append(coords[sel])
+                crop_ori_coords_list.append(ori_coords[sel])
+                crop_feats_list.append(feats[sel])
+            return crop_coords_list, crop_ori_coords_list, crop_feats_list
+        else:
+            for coords, ori_coords in zip(*data_list):
+                rand_idx = random.randint(0, int(self.resolution * 0.66))
+                sel0 = coords[:, 0] > rand_idx
+                max_range = self.resolution / 3 + rand_idx
+                sel1 = coords[:, 0] < max_range
+                sel = sel0 * sel1
+                crop_coords_list.append(coords[sel])
+                crop_ori_coords_list.append(ori_coords[sel])
+            return crop_coords_list, crop_ori_coords_list
+
+    def __call__(self, list_data):
+        coords_crop, feats_crop, coords_truth, feats_truth, indx = list(zip(*list_data))
+        item = construct_data_batch(coords_crop, feats_crop, coords_truth, feats_truth)
+        # else:
+        #     coords, ori_coords, indx = list(zip(*list_data))
+        #     item = construct_data_batch(coords, ori_coords)
+        return item
+
+
+def construct_data_batch(coords_crop, feats_crop, coords_truth, feats_truth):
+    coords_crop_batch = ME.utils.batched_coordinates(coords_crop)
+    feats_crop_batch = ME.utils.batched_coordinates(feats_crop)
+
+    data_batch_dict = {
+        # "batched_crop_coordinates": coords_crop_batch,
+        "crop_feats": torch.cat([torch.Tensor(feats).float() for feats in feats_crop]),
+        "tensor_batch_crop_coordinates": [coord.float() for coord in coords_crop],
+        "tensor_batch_crop_feats": [torch.from_numpy(feats).float() for feats in feats_crop],
+        "tensor_batch_truth_coordinates": [coord_truth for coord_truth in coords_truth],
+        "tensor_batch_truth_feats": [torch.from_numpy(feats).float() for feats in feats_truth]
+    }
+    return data_batch_dict

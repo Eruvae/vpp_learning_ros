@@ -1,7 +1,6 @@
 import numpy as np
 
-# Must be imported before large libs
-from autoencoder.dataset.ae_dataset import PointCloud
+from autoencoder.dataset.data_reader import PointCloud
 
 try:
     import open3d as o3d
@@ -16,44 +15,51 @@ M = np.array(
     ]
 )
 
+# SCANNET_COLOR_MAP = {
+#     0: (0., 0., 0.),
+#     1: (174., 199., 232.),
+#     2: (152., 223., 138.),
+#     3: (31., 119., 180.)
+# }
+
 SCANNET_COLOR_MAP = {
-    0: (0., 0., 0.),
-    1: (174., 199., 232.),
-    2: (152., 223., 138.),
+    0: (255., 0., 0.),  # red
+    1: (0., 255., 0.),  # green
+    2: (0., 0., 255.),  # blue
     3: (31., 119., 180.)
 }
 
 
-def visualize_coords_features(pred_coords, truth_coords, resolution=128, pred_feats=None, truth_feats=None):
-    """
-    visualize coords and features
-    Args:
-        pred_coords:
-        truth_coords:
-        resolution:
-        pred_feats:
-        truth_feats:
+def visualize_truth(data_dict, batch_ind, resolution, offset):
+    point = data_dict["tensor_batch_truth_coordinates"][batch_ind]
+    label = data_dict["tensor_batch_truth_feats"][batch_ind].numpy().squeeze()
+    opcd = PointCloud(point, np.array([SCANNET_COLOR_MAP[l.argmax()] for l in label]))
+    opcd.translate([offset * resolution, 0, 0])
+    return opcd
 
-    Returns:
 
-    """
-    # Map color
-    pred_color = None
-    truth_color = None
-    if pred_feats is not None:
-        pred_feats = pred_feats.squeeze().numpy()
-        pred_color = np.array([SCANNET_COLOR_MAP[l] for l in pred_feats])
-    if truth_feats is not None:
-        truth_feats = truth_feats.squeeze().numpy()
-        truth_color = np.array([SCANNET_COLOR_MAP[l] for l in truth_feats])
+def visualize_unfree_cells(data_dict, batch_ind, resolution, offset):
+    point = data_dict["tensor_batch_truth_coordinates"][batch_ind]
+    label = data_dict["tensor_batch_truth_feats"][batch_ind].numpy().squeeze()
+    point = point[label.argmax(1) != 0]
+    label = label[label.argmax(1) != 0]
 
-    pcd = PointCloud(pred_coords, pred_color)
-    pcd.estimate_normals()
-    pcd.translate([0.6 * resolution, 0, 0])
-    pcd.rotate(M, np.array([[0.0], [0.0], [0.0]]))
+    opcd = PointCloud(point, np.array([SCANNET_COLOR_MAP[l.argmax()] for l in label]))
+    opcd.translate([offset * resolution, 0, 0])
+    return opcd
 
-    opcd = PointCloud(truth_coords, truth_color)
-    opcd.translate([-0.6 * resolution, 0, 0])
-    opcd.estimate_normals()
-    opcd.rotate(M, np.array([[0.0], [0.0], [0.0]]))
-    o3d.visualization.draw_geometries([pcd, opcd])
+
+def visualize_input(data_dict, batch_ind, resolution, offset):
+    point = data_dict["tensor_batch_crop_coordinates"][batch_ind]
+    label = data_dict["tensor_batch_crop_feats"][batch_ind].numpy().squeeze()
+    opcd = PointCloud(point, np.array([SCANNET_COLOR_MAP[l.argmax()] for l in label]))
+    opcd.translate([offset * resolution, 0, 0])
+    return opcd
+
+
+def visualize_prediction(point, feats, resolution, offset):
+    point = point.detach().numpy()
+    feats = feats.detach().numpy()
+    pcd = PointCloud(point, np.array([SCANNET_COLOR_MAP[l.argmax()] for l in feats]))
+    pcd.translate([offset * resolution, 0, 0])
+    return pcd

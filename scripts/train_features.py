@@ -89,6 +89,7 @@ parser.add_argument("--max_visualization", type=int, default=4)
 ###############################################################################
 # End of utility functions
 ###############################################################################
+
 def train(dataloader, device, config):
     net = MinkUNet34(4, 4).to(device)
 
@@ -102,8 +103,8 @@ def train(dataloader, device, config):
     )
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.95)
 
-    weight = torch.Tensor(np.array([1 / 84, 1 / 15, 1 / 1, 1 / 125]))
-    crit = nn.BCEWithLogitsLoss(weight=weight)
+    weight = torch.Tensor(np.array([1 / 840, 1 / 15, 1 / 1, 1 / 1250]))
+    crit = nn.BCEWithLogitsLoss(pos_weight=weight)
 
     net.train()
     train_iter = iter(dataloader)
@@ -139,12 +140,6 @@ def train(dataloader, device, config):
         target_feature = data_dict["crop_feats"]
         loss = crit(out_feature, target_feature.to(device))
 
-        # num_layers, loss = len(out_cls), 0
-        # losses = []
-        # for out_cl, target in zip(out_cls, targets):
-        #     curr_loss = crit(out_cl.F.squeeze(), target.type(out_cl.F.dtype).to(device))
-        #     losses.append(curr_loss.item())
-        #     loss += curr_loss / num_layers
 
         loss.backward()
         optimizer.step()
