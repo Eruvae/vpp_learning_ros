@@ -4,9 +4,9 @@ import os.path
 
 import torch
 
-from autoencoder.dataset.ae_dataset_with_features import make_data_loader_with_features
 from autoencoder.utility import setup_logger
-from learner import AELearner
+from autoencoder.learner import AELearner
+from vpp_env_client import EnvironmentClient
 
 setup_logger()
 
@@ -28,7 +28,7 @@ def get_parse_args():
     parser.add_argument("--use_gpu", type=bool, default= False)
     parser.add_argument("--shuffle", type=bool, default=False)
     parser.add_argument("--repeat", type=bool, default=False)
-    parser.add_argument("--phase", type=str, default="eval", help="choose from train or eval")
+    parser.add_argument("--phase", type=str, default="inference", help="choose from train or eval or inference")
     parser.add_argument("--dir_to_data", type=str, default="/home/zeng/catkin_ws/data/data_cvx_test2",
                         help="path to the data directory")
     # "/home/zeng/catkin_ws/data/data_cvx/*.cvx"
@@ -53,5 +53,9 @@ if __name__ == "__main__":
     learner = AELearner(config)
     if config.phase == "train":
         learner.training()
-    else:
+    elif config.phase == "eval":
         learner.evaluation()
+    else:
+        client = EnvironmentClient(handle_simulation=False)
+        voxel_grid, robotPose, robotJoints, reward = client.sendReset(map_type='voxelgrid')
+        learner.inference(voxel_grid)

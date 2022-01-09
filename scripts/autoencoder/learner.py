@@ -22,11 +22,6 @@
 # Networks", CVPR'19 (https://arxiv.org/abs/1904.08755) if you use any part
 # of the code.
 
-
-import os
-import sys
-import subprocess
-import argparse
 import logging
 import numpy as np
 import time
