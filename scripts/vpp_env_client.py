@@ -4,6 +4,7 @@ import os
 import time
 import zmq
 import capnp
+
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "capnp"))
 import action_capnp
 import observation_capnp
@@ -11,11 +12,12 @@ import numpy as np
 import roslaunch
 from timeit import default_timer as timer
 
+
 class EnvironmentClient:
     def __init__(self, handle_simulation=False):
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.REQ)
-        self.socket.RCVTIMEO = 1000 # in milliseconds
+        self.socket.RCVTIMEO = 1000  # in milliseconds
         self.socket.bind("tcp://*:5555")
 
         if handle_simulation:
@@ -60,11 +62,22 @@ class EnvironmentClient:
             print('Converting pointcloud...')
             start = timer()
             points = np.asarray(obs_msg.map.pointcloud.points)
-            labels = np.asarray(obs_msg.map.pointcloud.labels)
+            labels = np.asarray(obs_msg.map.pointcloud.voxelgrid)
             points = points.reshape((len(labels), 3))
             end = timer()
             print('Converting pointcloud took', end - start, 's')
             return points, labels, robotPose, robotJoints, reward
+
+        elif which == "voxelgrid":
+            print('Converting voxelgrid...')
+            start = timer()
+            # points = np.asarray(obs_msg.map.pointcloud.points)
+            # labels = np.asarray(obs_msg.map.voxelgrid.labels)
+            voxelgrid = obs_msg.map.voxelgrid
+            # points = points.reshape((len(labels), 3))
+            end = timer()
+            print('Converting voxelgrid took', end - start, 's')
+            return voxelgrid, robotPose, robotJoints, reward
 
     def poseToNumpyArray(self, pose):
         return np.array([pose.position.x, pose.position.y, pose.position.z, pose.orientation.x, pose.orientation.y,
@@ -92,7 +105,6 @@ class EnvironmentClient:
 
     def encodeRandomizationParameters(self, action_msg, min_point, max_point, min_dist):
         action_msg.init("resetAndRandomize")
-
 
     def sendAction(self, action_msg):
         while True:
@@ -137,7 +149,8 @@ class EnvironmentClient:
         self.encodeRelativePose(action_msg, relative_pose)
         return self.sendAction(action_msg)
 
-    def sendReset(self, randomize=False, min_point=[-1, -1, -0.1], max_point=[1, 1, 0.1], min_dist=0.4, map_type='unchanged'):
+    def sendReset(self, randomize=False, min_point=[-1, -1, -0.1], max_point=[1, 1, 0.1], min_dist=0.4,
+                  map_type='unchanged'):
         action_msg = action_capnp.Action.new_message()
         action_msg.init("reset")
         if randomize:

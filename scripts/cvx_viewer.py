@@ -41,7 +41,7 @@ if len(sys.argv) < 2:
 
 with open(sys.argv[1]) as file:
     voxelgrid = voxelgrid_capnp.Voxelgrid.read(file, traversal_limit_in_words=2**32)
-    labels = np.asarray(voxelgrid.labels)
+    labels = np.asarray(voxelgrid.voxelgrid)
     shape = tuple(voxelgrid.shape)
     # labels = labels.reshape(shape)
     center = np.asarray(voxelgrid.center)

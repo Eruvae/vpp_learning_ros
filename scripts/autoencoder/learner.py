@@ -79,9 +79,9 @@ class AELearner:
 
         for i in range(self.config.max_iter):
 
-            s = time()
+            s = time.time()
             data_dict = train_iter.next()
-            d = time() - s
+            d = time.time() - s
 
             self.optimizer.zero_grad()
             sinput, target_key = self.generate_input_and_target(data_dict)
@@ -96,7 +96,7 @@ class AELearner:
 
             loss.backward()
             self.optimizer.step()
-            t = time() - s
+            t = time.time() - s
 
             if i % self.config.stat_freq == 0:
                 logging.info(
@@ -126,14 +126,7 @@ class AELearner:
             sinput, target_key = self.generate_input_and_target(data_dict)
             code, sout = self.net(sinput)
             # batch_code_coord, batch_code_feats = code.decomposed_coordinates_and_features
-            batch_coords, batch_feats = sout.decomposed_coordinates_and_features
-
-            for b, (coords, feats) in enumerate(zip(batch_coords, batch_feats)):
-                pcd_input = visualize_input(data_dict, b, self.config.resolution, offset=0)
-                pcd_truth = visualize_truth(data_dict, b, self.config.resolution, offset=2)
-                # pcd_truth2 = visualize_truth2(data_dict, b)
-                pcd = visualize_prediction(coords, feats, self.config.resolution, offset=4)
-                o3d.visualization.draw_geometries([pcd_input, pcd_truth, pcd])
+            self.visualize(data_dict, sout)
 
     def inference(self, voxelgrid):
         logging.info(self.net)
@@ -149,8 +142,18 @@ class AELearner:
         coordinates = code.coordinates.numpy()[:, 0]
         index = coordinates.argsort()
         features = code.features.detach().numpy()[index]
-
+        # self.visualize(data_batch_dict, sout)
         return features
+
+    def visualize(self, data_dict, sout):
+        batch_coords, batch_feats = sout.decomposed_coordinates_and_features
+
+        for b, (coords, feats) in enumerate(zip(batch_coords, batch_feats)):
+            pcd_input = visualize_input(data_dict, b, self.config.resolution, offset=0)
+            pcd_truth = visualize_truth(data_dict, b, self.config.resolution, offset=2)
+            # pcd_truth2 = visualize_truth2(data_dict, b)
+            pcd = visualize_prediction(coords, feats, self.config.resolution, offset=4)
+            o3d.visualization.draw_geometries([pcd_input, pcd_truth, pcd])
 
     def load_model(self):
         logging.info(f"Loading weights from {self.config.weights}")

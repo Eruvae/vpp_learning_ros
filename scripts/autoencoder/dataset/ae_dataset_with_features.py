@@ -105,6 +105,8 @@ def load_one_sample(voxelgrid, config):
     points = normalize(points)
     coords, _, feats = quantize_coordinates_with_feats(points, feats=labels,
                                                        resolution=config.resolution)
+    coords = [coords]
+    feats = [feats]
     data_batch_dict = construct_data_batch(coords, feats, coords, feats)
     return data_batch_dict
 

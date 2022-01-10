@@ -47,7 +47,7 @@ with open(sys.argv[1]) as file:
     else:
         pointcloud = pointcloud_capnp.Pointcloud.read(file, traversal_limit_in_words=2**32)
     points = np.asarray(pointcloud.points)
-    labels = np.asarray(pointcloud.labels)
+    labels = np.asarray(pointcloud.voxelgrid)
     points = points.reshape((len(labels), 3))
     points_occ = points[np.where(labels != 0)]
     points_roi = points[np.where(labels == 2)]
