@@ -7,11 +7,21 @@
 
 #define OBSFILL_USE_PARALLEL_LOOP
 
-OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame, double tree_resolution, bool initialize_evaluator) :
-  tfBuffer(tfBuffer), planningTree(new octomap_vpp::RoiOcTree(tree_resolution)), gtLoader(new roi_viewpoint_planner::GtOctreeLoader(tree_resolution)), evaluator(nullptr),
-  map_frame(map_frame), old_rois(0), tree_mtx(own_mtx)
+OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
+  const std::string &map_frame, const std::string &ws_frame, double tree_resolution, bool initialize_evaluator) :
+  tfBuffer(tfBuffer), planningTree(new octomap_vpp::RoiOcTree(tree_resolution)),
+  workspaceTree(nullptr), samplingTree(nullptr),
+  wsMin(-FLT_MAX, -FLT_MAX, -FLT_MAX),
+  wsMax(FLT_MAX, FLT_MAX, FLT_MAX),
+  stMin(-FLT_MAX, -FLT_MAX, -FLT_MAX),
+  stMax(FLT_MAX, FLT_MAX, FLT_MAX),
+  gtLoader(new roi_viewpoint_planner::GtOctreeLoader(tree_resolution)), evaluator(nullptr),
+  map_frame(map_frame), ws_frame(ws_frame), old_rois(0), tree_mtx(own_mtx)
 {
   octomapPub = nh.advertise<octomap_msgs::Octomap>("octomap", 1);
+  workspaceTreePub = nh.advertise<octomap_msgs::Octomap>("workspace_tree", 1, true);
+  samplingTreePub = nh.advertise<octomap_msgs::Octomap>("sampling_tree", 1, true);
+  initWorkspace(wstree_file, sampling_tree_file);
   roiSub = nh.subscribe("/detect_roi/results", 1, &OctreeManager::registerPointcloudWithRoi, this);
 
   if (initialize_evaluator)
@@ -24,11 +34,19 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, con
   }
 }
 
-OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &map_frame,
+OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, const std::string &wstree_file, const std::string &sampling_tree_file,
+              const std::string &map_frame, const std::string &ws_frame,
               const std::shared_ptr<octomap_vpp::RoiOcTree> &providedTree, boost::mutex &tree_mtx, bool initialize_evaluator) :
-  tfBuffer(tfBuffer), planningTree(providedTree), gtLoader(new roi_viewpoint_planner::GtOctreeLoader(providedTree->getResolution())), evaluator(nullptr),
-  map_frame(map_frame), old_rois(0), tree_mtx(tree_mtx)
+  tfBuffer(tfBuffer), planningTree(providedTree),
+  workspaceTree(nullptr), samplingTree(nullptr),
+  wsMin(-FLT_MAX, -FLT_MAX, -FLT_MAX),
+  wsMax(FLT_MAX, FLT_MAX, FLT_MAX),
+  stMin(-FLT_MAX, -FLT_MAX, -FLT_MAX),
+  stMax(FLT_MAX, FLT_MAX, FLT_MAX),
+  gtLoader(new roi_viewpoint_planner::GtOctreeLoader(providedTree->getResolution())), evaluator(nullptr),
+  map_frame(map_frame), ws_frame(ws_frame), old_rois(0), tree_mtx(tree_mtx)
 {
+  initWorkspace(wstree_file, sampling_tree_file);
   if (initialize_evaluator)
   {
     ros::NodeHandle nh_eval("evaluator");
@@ -36,6 +54,114 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, con
     evaluator.reset(new roi_viewpoint_planner::Evaluator(interface, nh, nh_eval, true, false, gtLoader));
     eval_trial_num = 0;
     evaluator->saveGtAsColoredCloud();
+  }
+}
+
+void OctreeManager::initWorkspace(const std::string &wstree_file, const std::string &sampling_tree_file)
+{
+  // Load workspace
+
+  octomap::AbstractOcTree *tree = octomap::AbstractOcTree::read(wstree_file);
+  if (!tree)
+  {
+    ROS_ERROR_STREAM("Workspace tree file could not be loaded");
+  }
+  else
+  {
+    octomap_vpp::CountingOcTree *countingTree = dynamic_cast<octomap_vpp::CountingOcTree*>(tree);
+
+    if (countingTree) // convert to workspace tree if counting tree loaded
+    {
+      workspaceTree.reset(new octomap_vpp::WorkspaceOcTree(*countingTree));
+      delete countingTree;
+    }
+    else
+    {
+      workspaceTree.reset(dynamic_cast<octomap_vpp::WorkspaceOcTree*>(tree));
+    }
+
+    if (!workspaceTree)
+    {
+      ROS_ERROR("Workspace tree type not recognized; please load either CountingOcTree or WorkspaceOcTree");
+      delete tree;
+    }
+    else
+    {
+      wsMin = octomap::point3d(FLT_MAX, FLT_MAX, FLT_MAX);
+      wsMax = octomap::point3d(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+      for (auto it = workspaceTree->begin_leafs(), end = workspaceTree->end_leafs(); it != end; it++)
+      {
+        octomap::point3d coord = it.getCoordinate();
+        if (coord.x() < wsMin.x()) wsMin.x() = coord.x();
+        if (coord.y() < wsMin.y()) wsMin.y() = coord.y();
+        if (coord.z() < wsMin.z()) wsMin.z() = coord.z();
+        if (coord.x() > wsMax.x()) wsMax.x() = coord.x();
+        if (coord.y() > wsMax.y()) wsMax.y() = coord.y();
+        if (coord.z() > wsMax.z()) wsMax.z() = coord.z();
+      }
+
+      if (workspaceTreePub)
+      {
+        octomap_msgs::Octomap ws_msg;
+        ws_msg.header.frame_id = ws_frame;
+        ws_msg.header.stamp = ros::Time(0);
+        bool msg_generated = octomap_msgs::fullMapToMsg(*workspaceTree, ws_msg);
+        if (msg_generated)
+        {
+          workspaceTreePub.publish(ws_msg);
+        }
+      }
+    }
+  }
+
+  // Load sampling tree
+
+  tree = octomap::AbstractOcTree::read(sampling_tree_file);
+  if (!tree)
+  {
+    ROS_ERROR_STREAM("Sampling tree file could not be loaded");
+  }
+  else
+  {
+    samplingTree.reset(dynamic_cast<octomap_vpp::WorkspaceOcTree*>(tree));
+    if (!samplingTree)
+    {
+      ROS_ERROR("Sampling tree must be of type WorkspaceOcTree");
+      delete tree;
+    }
+  }
+
+  if (!samplingTree) // if sampling tree not specified, use workspace octree
+  {
+    samplingTree = workspaceTree;
+  }
+
+  if (samplingTree)
+  {
+    stMin = octomap::point3d(FLT_MAX, FLT_MAX, FLT_MAX);
+    stMax = octomap::point3d(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+    for (auto it = samplingTree->begin_leafs(), end = samplingTree->end_leafs(); it != end; it++)
+    {
+      octomap::point3d coord = it.getCoordinate();
+      if (coord.x() < stMin.x()) stMin.x() = coord.x();
+      if (coord.y() < stMin.y()) stMin.y() = coord.y();
+      if (coord.z() < stMin.z()) stMin.z() = coord.z();
+      if (coord.x() > stMax.x()) stMax.x() = coord.x();
+      if (coord.y() > stMax.y()) stMax.y() = coord.y();
+      if (coord.z() > stMax.z()) stMax.z() = coord.z();
+    }
+
+    if (samplingTreePub)
+    {
+      octomap_msgs::Octomap st_msg;
+      st_msg.header.frame_id = ws_frame;
+      st_msg.header.stamp = ros::Time(0);
+      bool msg_generated = octomap_msgs::fullMapToMsg(*samplingTree, st_msg);
+      if (msg_generated)
+      {
+        samplingTreePub.publish(st_msg);
+      }
+    }
   }
 }
 
@@ -80,6 +206,90 @@ void OctreeManager::registerPointcloudWithRoi(const ros::MessageEvent<pointcloud
   tree_mtx.unlock();
 
   publishMap();
+}
+
+octomap::point3d OctreeManager::transformToMapFrame(const octomap::point3d &p)
+{
+  if (map_frame == ws_frame)
+    return p;
+
+  geometry_msgs::TransformStamped trans;
+  try
+  {
+    trans = tfBuffer.lookupTransform(map_frame, ws_frame, ros::Time(0));
+  }
+  catch (const tf2::TransformException &e)
+  {
+    ROS_ERROR_STREAM("Couldn't find transform to ws frame in transformToWorkspace: " << e.what());
+    return p;
+  }
+
+  octomap::point3d pt;
+  tf2::doTransform(p, pt, trans);
+  return pt;
+}
+
+geometry_msgs::Pose OctreeManager::transformToMapFrame(const geometry_msgs::Pose &p)
+{
+  if (map_frame == ws_frame)
+    return p;
+
+  geometry_msgs::TransformStamped trans;
+  try
+  {
+    trans = tfBuffer.lookupTransform(map_frame, ws_frame, ros::Time(0));
+  }
+  catch (const tf2::TransformException &e)
+  {
+    ROS_ERROR_STREAM("Couldn't find transform to ws frame in transformToWorkspace: " << e.what());
+    return p;
+  }
+
+  geometry_msgs::Pose pt;
+  tf2::doTransform(p, pt, trans);
+  return pt;
+}
+
+octomap::point3d OctreeManager::transformToWorkspace(const octomap::point3d &p)
+{
+  if (map_frame == ws_frame)
+    return p;
+
+  geometry_msgs::TransformStamped trans;
+  try
+  {
+    trans = tfBuffer.lookupTransform(ws_frame, map_frame, ros::Time(0));
+  }
+  catch (const tf2::TransformException &e)
+  {
+    ROS_ERROR_STREAM("Couldn't find transform to ws frame in transformToWorkspace: " << e.what());
+    return p;
+  }
+
+  octomap::point3d pt;
+  tf2::doTransform(p, pt, trans);
+  return pt;
+}
+
+geometry_msgs::Pose OctreeManager::transformToWorkspace(const geometry_msgs::Pose &p)
+{
+  if (map_frame == ws_frame)
+    return p;
+
+  geometry_msgs::TransformStamped trans;
+  try
+  {
+    trans = tfBuffer.lookupTransform(ws_frame, map_frame, ros::Time(0));
+  }
+  catch (const tf2::TransformException &e)
+  {
+    ROS_ERROR_STREAM("Couldn't find transform to ws frame in transformToWorkspace: " << e.what());
+    return p;
+  }
+
+  geometry_msgs::Pose pt;
+  tf2::doTransform(p, pt, trans);
+  return pt;
 }
 
 std::string OctreeManager::saveOctomap(const std::string &name, bool name_is_prefix)
@@ -327,6 +537,19 @@ void OctreeManager::generateVoxelgrid(vpp_msg::Voxelgrid::Builder &vx, const oct
   tree_mtx.unlock();
 }
 
+void OctreeManager::generateFullVoxelgrid(vpp_msg::Voxelgrid::Builder &vx)
+{
+  octomap::point3d center = (wsMin + wsMax)*0.5;
+  octomap::point3d size = (wsMax - wsMin) * (1.0/planningTree->getResolution());
+  uint16_t vx_cells = 0;
+  for (unsigned int i=0; i<3; i++)
+  {
+    uint16_t cells = static_cast<uint16_t>(size(i));
+    if (cells > vx_cells) vx_cells = cells;
+  }
+  generateVoxelgrid(vx, center, vx_cells);
+}
+
 uint32_t OctreeManager::getReward()
 {
   tree_mtx.lock();
@@ -373,6 +596,79 @@ bool OctreeManager::startEvaluator()
   eval_trial_num = 0;
   setEvaluatorStartParams();
   return true;
+}
+
+std::vector<octomap::point3d> OctreeManager::getRoiContours()
+{
+  std::vector<octomap::point3d> roi_contours;
+
+  octomap::KeySet roi = planningTree->getRoiKeys();
+  octomap::KeySet freeNeighbours;
+  for (const octomap::OcTreeKey &key : roi)
+  {
+    planningTree->getNeighborsInState(key, freeNeighbours, octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::FREE_NONROI, octomap_vpp::NB_18);
+  }
+  for (const octomap::OcTreeKey &key : freeNeighbours)
+  {
+    if (planningTree->hasNeighborInState(key, octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::UNKNOWN, octomap_vpp::NB_18))
+    {
+      roi_contours.push_back(planningTree->keyToCoord(key));
+    }
+  }
+  return roi_contours;
+}
+
+std::vector<octomap::point3d> OctreeManager::getOccContours()
+{
+  std::vector<octomap::point3d> occ_contours;
+  octomap::point3d stMin_tf = transformToMapFrame(stMin), stMax_tf = transformToMapFrame(stMax);
+  for (unsigned int i = 0; i < 3; i++)
+  {
+    if (stMin_tf(i) > stMax_tf(i))
+      std::swap(stMin_tf(i), stMax_tf(i));
+  }
+  for (auto it = planningTree->begin_leafs_bbx(stMin_tf, stMax_tf), end = planningTree->end_leafs_bbx(); it != end; it++)
+  {
+    if (samplingTree != nullptr && samplingTree->search(transformToWorkspace(it.getCoordinate())) == nullptr)
+    {
+      continue; // sampling tree specified and sampled point not in sampling tree
+    }
+    if (it->getLogOdds() < 0) // is node free; TODO: replace with bounds later
+    {
+      if (planningTree->hasNeighborInState(it.getKey(), octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::UNKNOWN, octomap_vpp::NB_6) &&
+          planningTree->hasNeighborInState(it.getKey(), octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::OCCUPIED_ROI, octomap_vpp::NB_6))
+      {
+        occ_contours.push_back(it.getCoordinate());
+      }
+    }
+  }
+  return occ_contours;
+}
+
+std::vector<octomap::point3d> OctreeManager::getFrontiers()
+{
+  std::vector<octomap::point3d> frontiers;
+  octomap::point3d wsMin_tf = transformToMapFrame(wsMin), wsMax_tf = transformToMapFrame(wsMax);
+  for (unsigned int i = 0; i < 3; i++)
+  {
+    if (wsMin_tf(i) > wsMax_tf(i))
+      std::swap(wsMin_tf(i), wsMax_tf(i));
+  }
+  for (auto it = planningTree->begin_leafs_bbx(wsMin_tf, wsMax_tf), end = planningTree->end_leafs_bbx(); it != end; it++)
+  {
+    if (workspaceTree != nullptr && workspaceTree->search(transformToWorkspace(it.getCoordinate())) == nullptr)
+    {
+      continue; // sampling tree specified and sampled point not in sampling tree
+    }
+    if (it->getLogOdds() < 0) // is node free; TODO: replace with bounds later
+    {
+      if (planningTree->hasNeighborInState(it.getKey(), octomap_vpp::NodeProperty::OCCUPANCY, octomap_vpp::NodeState::UNKNOWN, octomap_vpp::NB_6))
+      {
+        frontiers.push_back(it.getCoordinate());
+      }
+    }
+  }
+  return frontiers;
 }
 
 void OctreeManager::setEvaluatorStartParams()

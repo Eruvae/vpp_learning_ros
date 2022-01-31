@@ -48,7 +48,7 @@ int main(int argc, char **argv)
   tf2_ros::Buffer tfBuffer(ros::Duration(30));
   tf2_ros::TransformListener tfListener(tfBuffer);
 
-  OctreeManager oc_manager(nh, tfBuffer, map_frame, tree_resolution, evaluate_results);
+  OctreeManager oc_manager(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, evaluate_results);
   RobotController controller(nh, tfBuffer, map_frame);
   controller.reset();
   oc_manager.resetOctomap();
@@ -211,6 +211,10 @@ int main(int argc, char **argv)
       {
         vpp_msg::Voxelgrid::Builder vx = obs.initMap().initVoxelgrid();
         oc_manager.generateVoxelgrid(vx, cur_pose.trans(), 128);
+      }
+      else if (map_type == vpp_msg::MapType::FULL_VOXELGRID)
+      {
+        vpp_msg::Voxelgrid::Builder vx = obs.initMap().initFullVoxelgrid();
       }
 
       vpp_msg::Pose::Builder pose_msg = obs.initRobotPose();

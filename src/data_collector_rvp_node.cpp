@@ -143,7 +143,7 @@ int main(int argc, char **argv)
   tf2_ros::Buffer tfBuffer(ros::Duration(30));
   tf2_ros::TransformListener tfListener(tfBuffer);
 
-  OctreeManager oc_manager(nh, tfBuffer, map_frame, planner->getPlanningTree(), planner->getTreeMutex(), false);
+  OctreeManager oc_manager(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, planner->getPlanningTree(), planner->getTreeMutex(), false);
 
   const size_t NUM_SAMPLES_TO_COLLECT = 10;
   const size_t NUM_TRIES_TO_MOVE = 10;

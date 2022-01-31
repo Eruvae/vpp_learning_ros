@@ -20,6 +20,7 @@ struct Observation {
     }
     pointcloud @13 :Pointcloud;
     voxelgrid @14 :Voxelgrid;
+    fullVoxelgrid @15 :Voxelgrid;
   }
 
   foundRois @7 :UInt32;

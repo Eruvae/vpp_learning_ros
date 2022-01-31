@@ -23,7 +23,7 @@ int main(int argc, char **argv)
   tf2_ros::Buffer tfBuffer(ros::Duration(30));
   tf2_ros::TransformListener tfListener(tfBuffer);
 
-  OctreeManager oc_manager(nh, tfBuffer, map_frame, tree_resolution, false);
+  OctreeManager oc_manager(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, false);
   RobotController controller(nh, tfBuffer, map_frame);
   controller.reset();
   oc_manager.resetOctomap();
