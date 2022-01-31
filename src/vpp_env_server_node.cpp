@@ -215,6 +215,7 @@ int main(int argc, char **argv)
       else if (map_type == vpp_msg::MapType::FULL_VOXELGRID)
       {
         vpp_msg::Voxelgrid::Builder vx = obs.initMap().initFullVoxelgrid();
+        oc_manager.generateFullVoxelgrid(vx);
       }
 
       vpp_msg::Pose::Builder pose_msg = obs.initRobotPose();

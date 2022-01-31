@@ -196,7 +196,7 @@ int main(int argc, char **argv)
     // Write Voxelgrid
     capnp::MallocMessageBuilder vx_builder;
     vpp_msg::Voxelgrid::Builder vx = vx_builder.initRoot<vpp_msg::Voxelgrid>();
-    oc_manager.generateVoxelgrid(vx, cur_pose.trans(), vx_cells);
+    oc_manager.generateFullVoxelgrid(vx);
 
     const std::string vx_fname = "voxelgrid_" + std::to_string(i) + ".cvx";
     fd = open(vx_fname.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0666);
