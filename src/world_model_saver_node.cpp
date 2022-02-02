@@ -7,6 +7,8 @@
 #include <octomap_vpp/RoiOcTree.h>
 #include <octomap_vpp/octomap_transforms.h>
 
+using octomap_vpp::nbLut;
+
 struct ModelInfo
 {
   ModelInfo(const std::string &model, const gazebo_msgs::ModelState &state)
@@ -21,7 +23,11 @@ struct ModelOctree
   std::unique_ptr<octomap::OcTree> occ = nullptr;
   std::unique_ptr<octomap::OcTree> roi = nullptr;
 
-  ModelOctree(octomap::OcTree *occ=nullptr, octomap::OcTree *roi=nullptr) : occ(occ), roi(roi) {}
+  ModelOctree(octomap::OcTree *occ=nullptr, octomap::OcTree *roi=nullptr) : occ(occ), roi(roi)
+  {
+    if (occ) occ->expand();
+    if (roi) roi->expand();
+  }
 };
 
 std::string getModelType(const std::string &name)
@@ -104,9 +110,11 @@ std::unordered_map<std::string, ModelOctree> loadModelOcrees(double res)
   //const std::string path = package_path + "/cfg/plant_files/individual_fruits/" + name + "/";
   trees["VG07_6"] = {new octomap::OcTree(model_package + "/cfg/plant_files/VG07_6/VG07_6_" + r + ".bt"),
                      new octomap::OcTree(model_package + "/cfg/plant_files/VG07_6_fruits_" + r + ".bt")};
+  trees["VG07_6_more_occ"] = {new octomap::OcTree(model_package + "/cfg/plant_files/VG07_6_more_occ/VG07_6_more_occ_" + r + ".bt"),
+                              new octomap::OcTree(model_package + "/cfg/plant_files/VG07_6_fruits_" + r + ".bt")};
+  trees["VG07_6_one_fruit"] = {new octomap::OcTree(model_package + "/cfg/plant_files/VG07_6_one_fruit/VG07_6_one_fruit_" + r + ".bt"),
+                               new octomap::OcTree(model_package + "/cfg/plant_files/individual_fruits/VG07_6/" + r + "/VG07_6_fruit_7_" + r + ".bt")};
   trees["VG07_6_no_fruits"] = {new octomap::OcTree(model_package + "/cfg/plant_files/VG07_6_no_fruits/VG07_6_no_fruits_" + r + ".bt"), nullptr};
-  trees["VG07_6_more_occ"] = {new octomap::OcTree(model_package + "/cfg/plant_files/VG07_6_more_occ/VG07_6_more_occ_" + r + ".bt"), nullptr};
-  trees["VG07_6_one_fruit"] = {new octomap::OcTree(model_package + "/cfg/plant_files/VG07_6_one_fruit/VG07_6_one_fruit_" + r + ".bt"), nullptr};
   trees["Floor_room"] = {generateBoxOctree(res, 20, 20, 0.001, 0, 0, 0.01), nullptr};
   trees["grey_wall"] = {generateBoxOctree(res, 7.5, 0.2, 2.8, 0, 0, 1.4), nullptr};
   return trees;
@@ -126,10 +134,22 @@ std::unique_ptr<octomap_vpp::RoiOcTree> generateRoiOctree(double res)
       for(auto it = octree.occ->begin_leafs(), end = octree.occ->end_leafs(); it != end; it++)
       {
         octomap_vpp::RoiOcTreeNode *node = tree->setNodeValue(model_pose.transform(it.getCoordinate()), tree->getClampingThresMaxLog());
-        if (octree.roi && octree.roi->search(it.getKey()) != nullptr)
+        octomap::OcTreeKey k = it.getKey();
+        bool is_roi = false;
+        if (octree.roi)
         {
-          node->setRoiLogOdds(tree->getClampingThresMaxLog());
+          is_roi = octree.roi->search(k) != nullptr;
+          for (int i = 0; !is_roi && i < octomap_vpp::NB_6; i++)
+          {
+            octomap::OcTreeKey nbk(k[0] + nbLut[i][0], k[1] + nbLut[i][1], k[2] + nbLut[i][2]);
+            if (octree.roi->search(nbk) != nullptr)
+              is_roi = true;
+          }
         }
+        if (is_roi)
+          node->setRoiLogOdds(tree->getClampingThresMaxLog());
+        else
+          node->setRoiLogOdds(tree->getClampingThresMinLog());
       }
     }
   }
@@ -141,6 +161,6 @@ int main(int argc, char **argv)
   ros::init(argc, argv, "world_model_saver");
   ros::NodeHandle nh;
 
-  std::unique_ptr<octomap_vpp::RoiOcTree> tree = generateRoiOctree(0.005);
+  std::unique_ptr<octomap_vpp::RoiOcTree> tree = generateRoiOctree(0.01);
   return tree->write("test.ot");
 }
