@@ -168,6 +168,7 @@ include_directories(
 add_executable(vpp_env_server_node src/vpp_env_server_node.cpp src/octree_manager.cpp src/robot_controller.cpp ${CAPNP_SRCS})
 add_executable(data_collector_random_node src/data_collector_random_node.cpp src/octree_manager.cpp src/robot_controller.cpp ${CAPNP_SRCS})
 add_executable(data_collector_rvp_node src/data_collector_rvp_node.cpp src/octree_manager.cpp ${CAPNP_SRCS})
+add_executable(world_model_saver src/world_model_saver_node.cpp ${CAPNP_SRCS})
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -181,6 +182,7 @@ add_executable(data_collector_rvp_node src/data_collector_rvp_node.cpp src/octre
 add_dependencies(vpp_env_server_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 add_dependencies(data_collector_random_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 add_dependencies(data_collector_rvp_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(world_model_saver ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
 # target_link_libraries(${PROJECT_NAME}_node
@@ -189,6 +191,7 @@ add_dependencies(data_collector_rvp_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${c
 target_link_libraries(vpp_env_server_node ${catkin_LIBRARIES} ${OCTOMAP_LIBRARIES} ${ZeroMQ_LIBRARY} ${CAPNP_LIBRARIES} ${YAMLCPP_LIBRARIES} tbb)
 target_link_libraries(data_collector_random_node ${catkin_LIBRARIES} ${OCTOMAP_LIBRARIES} ${ZeroMQ_LIBRARY} ${CAPNP_LIBRARIES} ${YAMLCPP_LIBRARIES} tbb)
 target_link_libraries(data_collector_rvp_node ${catkin_LIBRARIES} ${OCTOMAP_LIBRARIES} ${ZeroMQ_LIBRARY} ${CAPNP_LIBRARIES} ${YAMLCPP_LIBRARIES} tbb)
+target_link_libraries(world_model_saver ${catkin_LIBRARIES} ${OCTOMAP_LIBRARIES} ${CAPNP_LIBRARIES})
 
 #############
 ## Install ##
