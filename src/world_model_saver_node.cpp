@@ -303,10 +303,10 @@ int main(int argc, char **argv)
   std::cout << "Max bounds: " << max_point << std::endl;
   std::cout << "Include walls? (Y/n)" << std::endl;
   readBool(include_walls);
-  std::cout << "Answer: " << (check_roi_neighbors ? "Yes" : "No") << std::endl;
+  std::cout << "Answer: " << (include_walls ? "Yes" : "No") << std::endl;
   std::cout << "Include floor? (Y/n)" << std::endl;
   readBool(include_floor);
-  std::cout << "Answer: " << (check_roi_neighbors ? "Yes" : "No") << std::endl;
+  std::cout << "Answer: " << (include_floor ? "Yes" : "No") << std::endl;
   std::cout << "Consider voxels neighboring ROI as ROI? (Y/n)" << std::endl;
   readBool(check_roi_neighbors);
   std::cout << "Answer: " << (check_roi_neighbors ? "Yes" : "No") << std::endl;
@@ -318,7 +318,7 @@ int main(int argc, char **argv)
   // Write Voxelgrid
   capnp::MallocMessageBuilder vx_builder;
   vpp_msg::Voxelgrid::Builder vx = vx_builder.initRoot<vpp_msg::Voxelgrid>();
-  generateVoxelgrid(vx, tree.get(), min_key, max_key);
+  generateVoxelgrid(vx, tree.get(), tree->coordToKey(min_point), tree->coordToKey(max_point));
 
   int fd = open("saved_world.cvx", O_WRONLY | O_CREAT | O_TRUNC, 0666);
   if (fd < 0)
