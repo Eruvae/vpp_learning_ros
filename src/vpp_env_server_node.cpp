@@ -236,6 +236,9 @@ int main(int argc, char **argv)
         reward = oc_manager.getRewardWithGt();
 
       obs.setFoundRois(reward);
+      auto [foundFree, foundOcc] = oc_manager.getFoundFreeAndOccupied();
+      obs.setFoundFree(foundFree);
+      obs.setFoundOcc(foundOcc);
       obs.setTotalRoiCells(oc_manager.getMaxGtReward());
       obs.setPlanningTime(planning_time);
 

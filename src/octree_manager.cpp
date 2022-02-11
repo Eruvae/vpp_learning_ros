@@ -18,6 +18,7 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, con
   gtLoader(new roi_viewpoint_planner::GtOctreeLoader(tree_resolution)), evaluator(nullptr),
   map_frame(map_frame), ws_frame(ws_frame), old_rois(0), tree_mtx(own_mtx)
 {
+  planningTree->enableChangeDetection(true);
   octomapPub = nh.advertise<octomap_msgs::Octomap>("octomap", 1);
   workspaceTreePub = nh.advertise<octomap_msgs::Octomap>("workspace_tree", 1, true);
   samplingTreePub = nh.advertise<octomap_msgs::Octomap>("sampling_tree", 1, true);
@@ -46,6 +47,7 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, con
   gtLoader(new roi_viewpoint_planner::GtOctreeLoader(providedTree->getResolution())), evaluator(nullptr),
   map_frame(map_frame), ws_frame(ws_frame), old_rois(0), tree_mtx(tree_mtx)
 {
+  planningTree->enableChangeDetection(true);
   initWorkspace(wstree_file, sampling_tree_file);
   if (initialize_evaluator)
   {
@@ -336,6 +338,7 @@ void OctreeManager::resetOctomap()
   tree_mtx.lock();
   planningTree->clear();
   planningTree->clearRoiKeys();
+  planningTree->resetChangeDetection();
   old_rois = 0;
   tree_mtx.unlock();
   encountered_keys.clear();
@@ -589,6 +592,25 @@ uint32_t OctreeManager::getRewardWithGt()
 uint32_t OctreeManager::getMaxGtReward()
 {
   return gtLoader->getTotalFruitCellCount();
+}
+
+std::tuple<uint32_t, uint32_t> OctreeManager::getFoundFreeAndOccupied()
+{
+  uint32_t found_free = 0, found_occ = 0;
+  tree_mtx.lock();
+  for (auto it = planningTree->changedKeysBegin(), end = planningTree->changedKeysEnd(); it != end; it++)
+  {
+    const octomap::OcTreeKey &key = it->first;
+    octomap_vpp::RoiOcTreeNode *node = planningTree->search(key);
+    octomap_vpp::NodeState occ = planningTree->getNodeState(node, octomap_vpp::NodeProperty::OCCUPANCY);
+    octomap_vpp::NodeState roi = planningTree->getNodeState(node, octomap_vpp::NodeProperty::ROI);
+    if (roi == octomap_vpp::NodeState::OCCUPIED_ROI) continue; // ROI nodes counted by separate function
+    else if (occ == octomap_vpp::NodeState::OCCUPIED_ROI) found_occ++;
+    else if (occ == octomap_vpp::NodeState::FREE_NONROI) found_free++;
+  }
+  planningTree->resetChangeDetection();
+  tree_mtx.unlock();
+  return {found_free, found_occ};
 }
 
 bool OctreeManager::startEvaluator()

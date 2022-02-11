@@ -96,6 +96,8 @@ public:
 
   uint32_t getMaxGtReward();
 
+  std::tuple<uint32_t, uint32_t> getFoundFreeAndOccupied();
+
   std::vector<octomap::point3d> getRoiContours();
   std::vector<octomap::point3d> getOccContours();
   std::vector<octomap::point3d> getFrontiers();
