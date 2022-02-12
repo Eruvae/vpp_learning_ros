@@ -4,6 +4,7 @@ import os
 import time
 import zmq
 import capnp
+
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "capnp"))
 import action_capnp
 import observation_capnp
@@ -11,11 +12,12 @@ import numpy as np
 import roslaunch
 from timeit import default_timer as timer
 
+
 class EnvironmentClient:
     def __init__(self, handle_simulation=False):
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.REQ)
-        self.socket.RCVTIMEO = 1000 # in milliseconds
+        self.socket.RCVTIMEO = 1000  # in milliseconds
         self.socket.bind("tcp://*:5555")
 
         if handle_simulation:
@@ -41,12 +43,14 @@ class EnvironmentClient:
     def decodeObservation(self, obs_msg):
         robotPose = self.poseToNumpyArray(obs_msg.robotPose)
         robotJoints = np.array(obs_msg.robotJoints)
-
+        foundFree = 0
+        foundOcc = 0
+        foundRois = 0
         if obs_msg.planningTime > 0:
             # reward = obs_msg.foundRois / obs_msg.planningTime
-            reward = obs_msg.foundRois
-        else:
-            reward = 0
+            foundFree = obs_msg.foundFree
+            foundOcc = obs_msg.foundOcc
+            foundRois = obs_msg.foundRois
 
         which = obs_msg.map.which()
         if which == 'countMap':
@@ -55,8 +59,11 @@ class EnvironmentClient:
             freeCount = np.reshape(np.array(obs_msg.map.countMap.freeCount), shape)
             occupiedCount = np.reshape(np.array(obs_msg.map.countMap.occupiedCount), shape)
             roiCount = np.reshape(np.array(obs_msg.map.countMap.roiCount), shape)
-            return unknownCount, freeCount, occupiedCount, roiCount, robotPose, robotJoints, reward
+
+            return unknownCount, freeCount, occupiedCount, roiCount, robotPose, foundFree, foundOcc, foundRois
+
         elif which == 'pointcloud':
+            reward = 0
             print('Converting pointcloud...')
             start = timer()
             points = np.asarray(obs_msg.map.pointcloud.points)
@@ -92,7 +99,6 @@ class EnvironmentClient:
 
     def encodeRandomizationParameters(self, action_msg, min_point, max_point, min_dist):
         action_msg.init("resetAndRandomize")
-
 
     def sendAction(self, action_msg):
         while True:
@@ -137,7 +143,8 @@ class EnvironmentClient:
         self.encodeRelativePose(action_msg, relative_pose)
         return self.sendAction(action_msg)
 
-    def sendReset(self, randomize=False, min_point=[-1, -1, -0.1], max_point=[1, 1, 0.1], min_dist=0.4, map_type='unchanged'):
+    def sendReset(self, randomize=False, min_point=[-1, -1, -0.1], max_point=[1, 1, 0.1], min_dist=0.4,
+                  map_type='unchanged'):
         action_msg = action_capnp.Action.new_message()
         action_msg.init("reset")
         if randomize:
