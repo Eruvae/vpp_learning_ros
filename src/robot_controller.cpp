@@ -39,13 +39,13 @@ bool RobotController::planAndExecute(bool async, double *plan_length, double *tr
         } else {
             ROS_INFO("==============manipulator_group.asyncExecute(plan) before");
             res = manipulator_group.execute(plan);
-            ROS_INFO("==================manipulator_group.execute(plan)");
+            ROS_INFO("==============manipulator_group.execute(plan)");
         }
 
 
         if (plan_length){
             *plan_length = roi_viewpoint_planner::computeTrajectoryLength(plan);
-            ROS_INFO("=========================roi_viewpoint_planner::computeTrajectoryLength(plan)");
+            ROS_INFO("==============roi_viewpoint_planner::computeTrajectoryLength(plan)");
         }
         if (traj_duration){
             *traj_duration = roi_viewpoint_planner::getTrajectoryDuration(plan);
