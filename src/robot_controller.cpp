@@ -33,9 +33,11 @@ bool RobotController::planAndExecute(bool async, double *plan_length, double *tr
     }
     try {
         if (async) {
+            ROS_INFO("==============manipulator_group.asyncExecute(plan) before");
             res = manipulator_group.asyncExecute(plan);
             ROS_INFO("==============manipulator_group.asyncExecute(plan)");
         } else {
+            ROS_INFO("==============manipulator_group.asyncExecute(plan) before");
             res = manipulator_group.execute(plan);
             ROS_INFO("==================manipulator_group.execute(plan)");
         }
