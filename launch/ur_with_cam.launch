@@ -102,7 +102,7 @@
   <!-- Start moveit -->
   <include file="$(find ur_with_cam_gazebo)/launch/inc/move_group.launch">
     <arg name="base" value="$(arg base)" />
-    <arg name="debug" value="true" />
+<!--    <arg name="debug" value="true" />-->
     <arg name="use_rvp_moveit_plugin" value="$(arg use_rvp_moveit_plugin)" />
   </include>
 
