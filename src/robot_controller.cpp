@@ -36,17 +36,18 @@ bool RobotController::planAndExecute(bool async, double *plan_length, double *tr
             res = manipulator_group.asyncExecute(plan);
         else
             res = manipulator_group.execute(plan);
+        if (plan_length)
+            *plan_length = roi_viewpoint_planner::computeTrajectoryLength(plan);
+
+        if (traj_duration)
+            *traj_duration = roi_viewpoint_planner::getTrajectoryDuration(plan);
+
     }
     catch(std::runtime_error& ex) {
         ROS_ERROR("Exception: [%s]", ex.what());
     }
 
 
-    if (plan_length)
-        *plan_length = roi_viewpoint_planner::computeTrajectoryLength(plan);
-
-    if (traj_duration)
-        *traj_duration = roi_viewpoint_planner::getTrajectoryDuration(plan);
 
     /*if (res != MoveItErrorCode::SUCCESS)
     {
