@@ -27,38 +27,33 @@ bool RobotController::planAndExecute(bool async, double *plan_length, double *tr
     ros::Time planStartTime = ros::Time::now();
     MoveItErrorCode res = manipulator_group.plan(plan);
     ROS_INFO_STREAM("Planning duration: " << (ros::Time::now() - planStartTime));
-    if (res != MoveItErrorCode::SUCCESS) {
-        ROS_INFO("Could not find plan");
-        return false;
+    if (res != MoveItErrorCode::SUCCESS)
+    {
+      ROS_INFO("Could not find plan");
+      return false;
     }
-    try {
-        if (async) {
-            ROS_INFO("==============manipulator_group.asyncExecute(plan) before");
-            res = manipulator_group.asyncExecute(plan);
-            ROS_INFO("==============manipulator_group.asyncExecute(plan)");
-        } else {
-            ROS_INFO("==============manipulator_group.asyncExecute(plan) before");
-            res = manipulator_group.execute(plan);
-            ROS_INFO("==============manipulator_group.execute(plan)");
-        }
+    try
+    {
+      if (async)
+      {
+          res = manipulator_group.asyncExecute(plan);
+      } else
+      {
+          res = manipulator_group.execute(plan);
+      }
 
-
-        if (plan_length){
-            *plan_length = roi_viewpoint_planner::computeTrajectoryLength(plan);
-            ROS_INFO("==============roi_viewpoint_planner::computeTrajectoryLength(plan)");
-        }
-        if (traj_duration){
-            *traj_duration = roi_viewpoint_planner::getTrajectoryDuration(plan);
-            ROS_INFO("============================roi_viewpoint_planner::getTrajectoryDuration(plan)");
-        }
-
-
+      if (plan_length)
+      {
+          *plan_length = roi_viewpoint_planner::computeTrajectoryLength(plan);
+      }
+      if (traj_duration)
+      {
+          *traj_duration = roi_viewpoint_planner::getTrajectoryDuration(plan);
+      }
     }
     catch (std::runtime_error &ex) {
         ROS_ERROR("Exception: [%s]", ex.what());
     }
-
-
 
     /*if (res != MoveItErrorCode::SUCCESS)
     {

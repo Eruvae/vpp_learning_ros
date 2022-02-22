@@ -7,7 +7,7 @@
 #include <moveit/planning_interface/planning_interface.h>
 
 using moveit::planning_interface::MoveGroupInterface;
-using moveit::planning_interface::MoveItErrorCode;
+using moveit::core::MoveItErrorCode;
 
 class RobotController
 {
