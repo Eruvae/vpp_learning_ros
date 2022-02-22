@@ -49,7 +49,7 @@ bool RobotController::planAndExecute(bool async, double *plan_length, double *tr
         }
         if (traj_duration){
             *traj_duration = roi_viewpoint_planner::getTrajectoryDuration(plan);
-            ROS_INFO("============================roi_viewpoint_planner::getTrajectoryDuration(plan)");
+            ROS_INFO("==============roi_viewpoint_planner::getTrajectoryDuration(plan)");
         }
 
 
