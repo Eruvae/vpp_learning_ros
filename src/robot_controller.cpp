@@ -27,29 +27,23 @@ bool RobotController::planAndExecute(bool async, double *plan_length, double *tr
     ros::Time planStartTime = ros::Time::now();
     MoveItErrorCode res = manipulator_group.plan(plan);
     ROS_INFO_STREAM("Planning duration: " << (ros::Time::now() - planStartTime));
-    if (res != MoveItErrorCode::SUCCESS)
-    {
-      ROS_INFO("Could not find plan");
-      return false;
+    if (res != MoveItErrorCode::SUCCESS) {
+        ROS_INFO("Could not find plan");
+        return false;
     }
-    try
-    {
-      if (async)
-      {
-          res = manipulator_group.asyncExecute(plan);
-      } else
-      {
-          res = manipulator_group.execute(plan);
-      }
+    try {
+        if (async) {
+            res = manipulator_group.asyncExecute(plan);
+        } else {
+            res = manipulator_group.execute(plan);
+        }
 
-      if (plan_length)
-      {
-          *plan_length = roi_viewpoint_planner::computeTrajectoryLength(plan);
-      }
-      if (traj_duration)
-      {
-          *traj_duration = roi_viewpoint_planner::getTrajectoryDuration(plan);
-      }
+        if (plan_length) {
+            *plan_length = roi_viewpoint_planner::computeTrajectoryLength(plan);
+        }
+        if (traj_duration) {
+            *traj_duration = roi_viewpoint_planner::getTrajectoryDuration(plan);
+        }
     }
     catch (std::runtime_error &ex) {
         ROS_ERROR("Exception: [%s]", ex.what());
@@ -95,6 +89,9 @@ bool RobotController::moveToPose(const geometry_msgs::Pose &goal_pose, bool asyn
     }
     ROS_INFO_STREAM("IK solve time: " << (ros::Time::now() - setTargetTime));
 //    goalPose.position
+    if (goal_pose.position.z > 1.5) {
+        return false;
+    }
     return planAndExecute(async, plan_length, traj_duration);
 }
 
