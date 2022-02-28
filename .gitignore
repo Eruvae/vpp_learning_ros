@@ -3,3 +3,6 @@
 *.capnp.h
 *.pth
 __pycache__
+
+.idea
+.cmake-build-debug
