@@ -88,12 +88,13 @@ bool RobotController::reset() {
 bool RobotController::moveToPose(const geometry_msgs::Pose &goal_pose, bool async, double *plan_length,
                                  double *traj_duration) {
     ros::Time setTargetTime = ros::Time::now();
+
     if (!manipulator_group.setJointValueTarget(goal_pose, end_effector_link)) {
         ROS_INFO_STREAM("Could not find IK for specified pose (Timeout: " << (ros::Time::now() - setTargetTime) << ")");
         return false;
     }
     ROS_INFO_STREAM("IK solve time: " << (ros::Time::now() - setTargetTime));
-
+//    goalPose.position
     return planAndExecute(async, plan_length, traj_duration);
 }
 

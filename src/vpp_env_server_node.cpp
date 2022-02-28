@@ -10,7 +10,7 @@
 #include "octree_manager.h"
 #include "robot_controller.h"
 #include "utils.h"
-
+#include <std_srvs/Empty.h>
 /*void fillListWithRandomData(capnp::List<uint32_t>::Builder &list, uint32_t max)
 {
   static std::default_random_engine generator;
@@ -47,6 +47,9 @@ int main(int argc, char **argv)
 
   tf2_ros::Buffer tfBuffer(ros::Duration(30));
   tf2_ros::TransformListener tfListener(tfBuffer);
+
+  ros::ServiceClient resetOctomapClient = nh.serviceClient<std_srvs::Empty>("/clear_octomap");
+  std_srvs::Empty resetOctomapSrv;
 
   OctreeManager oc_manager(nh, tfBuffer, wstree_file, sampling_tree_file, map_frame, ws_frame, tree_resolution, evaluate_results);
   RobotController controller(nh, tfBuffer, map_frame);
@@ -103,6 +106,11 @@ int main(int argc, char **argv)
         ros::Time reset_start_time = ros::Time::now();
         vpp_msg::Action::Reset::Reader reset_params = act.getReset();
 
+        if (!resetOctomapClient.call(resetOctomapSrv))
+        {
+            ROS_ERROR("Failed to reset moveit octomap");
+        }
+
         success = controller.reset();
 
         if (reset_params.getRandomize())
@@ -120,6 +128,10 @@ int main(int argc, char **argv)
 
         oc_manager.resetOctomap();
 
+        if (!resetOctomapClient.call(resetOctomapSrv))
+        {
+           ROS_ERROR("Failed to reset moveit octomap");
+        }
         accumulatedPlanLength = 0;
         accumulatedTrajectoryDuration = 0;
 

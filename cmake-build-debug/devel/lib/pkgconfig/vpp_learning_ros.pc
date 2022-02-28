@@ -1,0 +1,8 @@
+prefix=/home/zeng/catkin_ws/src/vpp_learning_ros/cmake-build-debug/devel
+
+Name: vpp_learning_ros
+Description: Description of vpp_learning_ros
+Version: 0.1.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: roscpp octomap_ros octomap_msgs octomap_vpp moveit_ros_planning_interface pointcloud_roi_msgs roi_viewpoint_planner

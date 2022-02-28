@@ -1,0 +1,2 @@
+- setup-file:
+    local-name: /home/zeng/catkin_ws/src/vpp_learning_ros/cmake-build-debug/devel/setup.sh
