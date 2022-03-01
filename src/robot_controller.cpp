@@ -85,6 +85,12 @@ bool RobotController::moveToPose(const geometry_msgs::Pose &goal_pose, bool asyn
     if (goal_pose.position.z > 1.5) {
         return false;
     }
+    if (goal_pose.position.x < -1.5 or goal_pose.position.x > 1.5) {
+        return false;
+    }
+    if (goal_pose.position.y < -1.5 or goal_pose.position.y > 1.5) {
+        return false;
+    }
     if (!manipulator_group.setJointValueTarget(goal_pose, end_effector_link)) {
         ROS_INFO_STREAM("Could not find IK for specified pose (Timeout: " << (ros::Time::now() - setTargetTime) << ")");
         return false;
