@@ -59,6 +59,7 @@
   <depend>moveit_ros_planning_interface</depend>
   <depend>pointcloud_roi_msgs</depend>
   <depend>roi_viewpoint_planner</depend>
+  <depend>rvp_evaluation</depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>

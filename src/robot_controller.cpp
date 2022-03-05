@@ -1,6 +1,6 @@
 #include "robot_controller.h"
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
-#include <roi_viewpoint_planner/rvp_utils.h>
+#include <rvp_evaluation/rvp_utils.h>
 
 RobotController::RobotController(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer,
                                  const std::string &pose_reference_frame, const std::string &group_name,
@@ -44,11 +44,11 @@ bool RobotController::planAndExecute(bool async, double *plan_length, double *tr
 
       if (plan_length)
       {
-          *plan_length = roi_viewpoint_planner::computeTrajectoryLength(plan);
+          *plan_length = rvp_evaluation::computeTrajectoryLength(plan);
       }
       if (traj_duration)
       {
-          *traj_duration = roi_viewpoint_planner::getTrajectoryDuration(plan);
+          *traj_duration = rvp_evaluation::getTrajectoryDuration(plan);
       }
     }
     catch (std::runtime_error &ex) {

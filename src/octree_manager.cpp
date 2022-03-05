@@ -3,7 +3,7 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/range/counting_range.hpp>
 #include <execution>
-#include <roi_viewpoint_planner/planner_interfaces/provided_tree_interface.h>
+#include <rvp_evaluation/octree_provider_interfaces/provided_tree_interface.h>
 
 #define OBSFILL_USE_PARALLEL_LOOP
 
@@ -15,7 +15,7 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, con
   wsMax(FLT_MAX, FLT_MAX, FLT_MAX),
   stMin(-FLT_MAX, -FLT_MAX, -FLT_MAX),
   stMax(FLT_MAX, FLT_MAX, FLT_MAX),
-  gtLoader(new roi_viewpoint_planner::GtOctreeLoader(tree_resolution)), evaluator(nullptr),
+  gtLoader(new rvp_evaluation::GtOctreeLoader(tree_resolution)), evaluator(nullptr),
   map_frame(map_frame), ws_frame(ws_frame), old_rois(0), tree_mtx(own_mtx)
 {
   planningTree->enableChangeDetection(true);
@@ -28,8 +28,8 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, con
   if (initialize_evaluator)
   {
     ros::NodeHandle nh_eval("evaluator");
-    std::shared_ptr<roi_viewpoint_planner::ProvidedTreeInterface> interface(new roi_viewpoint_planner::ProvidedTreeInterface(planningTree, tree_mtx));
-    evaluator.reset(new roi_viewpoint_planner::Evaluator(interface, nh, nh_eval, true, false, gtLoader));
+    std::shared_ptr<rvp_evaluation::ProvidedTreeInterface> interface(new rvp_evaluation::ProvidedTreeInterface(planningTree, tree_mtx));
+    evaluator.reset(new rvp_evaluation::Evaluator(interface, nh, nh_eval, true, false, gtLoader));
     eval_trial_num = 0;
     evaluator->saveGtAsColoredCloud();
   }
@@ -44,7 +44,7 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, con
   wsMax(FLT_MAX, FLT_MAX, FLT_MAX),
   stMin(-FLT_MAX, -FLT_MAX, -FLT_MAX),
   stMax(FLT_MAX, FLT_MAX, FLT_MAX),
-  gtLoader(new roi_viewpoint_planner::GtOctreeLoader(providedTree->getResolution())), evaluator(nullptr),
+  gtLoader(new rvp_evaluation::GtOctreeLoader(providedTree->getResolution())), evaluator(nullptr),
   map_frame(map_frame), ws_frame(ws_frame), old_rois(0), tree_mtx(tree_mtx)
 {
   planningTree->enableChangeDetection(true);
@@ -52,8 +52,8 @@ OctreeManager::OctreeManager(ros::NodeHandle &nh, tf2_ros::Buffer &tfBuffer, con
   if (initialize_evaluator)
   {
     ros::NodeHandle nh_eval("evaluator");
-    std::shared_ptr<roi_viewpoint_planner::ProvidedTreeInterface> interface(new roi_viewpoint_planner::ProvidedTreeInterface(planningTree, tree_mtx));
-    evaluator.reset(new roi_viewpoint_planner::Evaluator(interface, nh, nh_eval, true, false, gtLoader));
+    std::shared_ptr<rvp_evaluation::ProvidedTreeInterface> interface(new rvp_evaluation::ProvidedTreeInterface(planningTree, tree_mtx));
+    evaluator.reset(new rvp_evaluation::Evaluator(interface, nh, nh_eval, true, false, gtLoader));
     eval_trial_num = 0;
     evaluator->saveGtAsColoredCloud();
   }
@@ -732,8 +732,8 @@ bool OctreeManager::saveEvaluatorData(double plan_length, double traj_duration)
   eval_accumulatedPlanDuration += traj_duration;
   eval_accumulatedPlanLength += plan_length;
 
-  roi_viewpoint_planner::EvaluationParameters res = evaluator->processDetectedRois(true, eval_trial_num, static_cast<size_t>(passed_time));
-  roi_viewpoint_planner::EvaluationParametersOld resOld = evaluator->processDetectedRoisOld();
+  rvp_evaluation::EvaluationParameters res = evaluator->processDetectedRois(true, eval_trial_num, static_cast<size_t>(passed_time));
+  rvp_evaluation::EvaluationParametersOld resOld = evaluator->processDetectedRoisOld();
 
   eval_resultsFile << passed_time << "," << eval_accumulatedPlanDuration << "," << eval_accumulatedPlanLength << ",";
   evaluator->writeParams(eval_resultsFile, res) << "," << eval_lastStep << std::endl;

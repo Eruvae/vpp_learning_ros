@@ -12,6 +12,7 @@ set (CATKIN_DEPENDENCIES
     moveit_ros_planning_interface
     pointcloud_roi_msgs
     roi_viewpoint_planner
+    rvp_evaluation
 )
 
 ## Find catkin macros and libraries

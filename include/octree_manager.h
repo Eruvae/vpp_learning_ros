@@ -13,8 +13,8 @@
 #include "observation.capnp.h"
 #include "pointcloud.capnp.h"
 #include "voxelgrid.capnp.h"
-#include <roi_viewpoint_planner/gt_octree_loader.h>
-#include <roi_viewpoint_planner/evaluator.h>
+#include <rvp_evaluation/gt_octree_loader.h>
+#include <rvp_evaluation/evaluator.h>
 
 class OctreeManager
 {
@@ -25,8 +25,8 @@ private:
   std::shared_ptr<octomap_vpp::WorkspaceOcTree> samplingTree;
   octomap::point3d wsMin, wsMax;
   octomap::point3d stMin, stMax;
-  std::shared_ptr<roi_viewpoint_planner::GtOctreeLoader> gtLoader;
-  std::unique_ptr<roi_viewpoint_planner::Evaluator> evaluator;
+  std::shared_ptr<rvp_evaluation::GtOctreeLoader> gtLoader;
+  std::unique_ptr<rvp_evaluation::Evaluator> evaluator;
   boost::mutex own_mtx;
   boost::mutex &tree_mtx;
   const std::string map_frame;
