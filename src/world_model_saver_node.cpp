@@ -59,11 +59,12 @@ std::vector<ModelInfo> readModelPoses()
   return model_list;
 }
 
+
 RoiOctreeWithBounds generateRoiOctree(double res, const octomap::point3d &min_point, const octomap::point3d &max_point, bool include_walls, bool include_floor, bool check_roi_neighbors)
 {
   static constexpr octomap::key_type MINKV(std::numeric_limits<octomap::key_type>::lowest()), MAXKV(std::numeric_limits<octomap::key_type>::max());
   octomap::OcTreeKey min_key(MAXKV, MAXKV, MAXKV), max_key(MINKV, MINKV, MINKV);
-  auto model_map = loadModelOcrees(res, include_walls, include_floor);
+  auto model_map = loadModelOctrees(res, include_walls, include_floor);
   auto model_list = readModelPoses();
   std::unique_ptr<octomap_vpp::RoiOcTree> tree(new octomap_vpp::RoiOcTree(res));
   for (const ModelInfo &model : model_list)

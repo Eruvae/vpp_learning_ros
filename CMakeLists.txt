@@ -1,10 +1,11 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.0.2)
 project(vpp_learning_ros)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 add_compile_options(-std=c++17)
 
 set (CATKIN_DEPENDENCIES
+    cmake_modules
     roscpp
     octomap_ros
     octomap_msgs
@@ -29,6 +30,10 @@ find_package(CapnProto REQUIRED)
 find_package(ZeroMQ QUIET)
 
 find_package(TBB REQUIRED)
+
+find_package(Open3D REQUIRED)
+
+find_package(TinyXML2 REQUIRED)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(YAMLCPP yaml-cpp REQUIRED)
@@ -150,6 +155,8 @@ include_directories(
   ${OCTOMAP_INCLUDE_DIRS}
   ${CAPNP_INCLUDE_DIRS}
   ${YAMLCPP_INCLUDE_DIRS}
+  ${Open3D_INCLUDE_DIRS}
+  ${TinyXML2_INCLUDE_DIRS}
 )
 
 ## Declare a C++ library
@@ -194,8 +201,8 @@ add_dependencies(plant_model_saver ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_
 target_link_libraries(vpp_env_server_node ${catkin_LIBRARIES} ${OCTOMAP_LIBRARIES} ${ZeroMQ_LIBRARY} ${CAPNP_LIBRARIES} ${YAMLCPP_LIBRARIES} tbb)
 target_link_libraries(data_collector_random_node ${catkin_LIBRARIES} ${OCTOMAP_LIBRARIES} ${ZeroMQ_LIBRARY} ${CAPNP_LIBRARIES} ${YAMLCPP_LIBRARIES} tbb)
 target_link_libraries(data_collector_rvp_node ${catkin_LIBRARIES} ${OCTOMAP_LIBRARIES} ${ZeroMQ_LIBRARY} ${CAPNP_LIBRARIES} ${YAMLCPP_LIBRARIES} tbb)
-target_link_libraries(world_model_saver ${catkin_LIBRARIES} ${OCTOMAP_LIBRARIES} ${CAPNP_LIBRARIES})
-target_link_libraries(plant_model_saver ${catkin_LIBRARIES} ${OCTOMAP_LIBRARIES} ${CAPNP_LIBRARIES})
+target_link_libraries(world_model_saver ${catkin_LIBRARIES} ${OCTOMAP_LIBRARIES} ${CAPNP_LIBRARIES} ${Open3D_LIBRARIES} ${TinyXML2_LIBRARIES})
+target_link_libraries(plant_model_saver ${catkin_LIBRARIES} ${OCTOMAP_LIBRARIES} ${CAPNP_LIBRARIES} ${Open3D_LIBRARIES} ${TinyXML2_LIBRARIES})
 
 #############
 ## Install ##

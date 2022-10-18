@@ -51,6 +51,7 @@
   <!--   <doc_depend>doxygen</doc_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
 
+  <depend>cmake_modules</depend>
   <depend>roscpp</depend>
   <depend>octomap</depend>
   <depend>octomap_ros</depend>

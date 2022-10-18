@@ -10,7 +10,7 @@ std::map<std::string, RoiOctreeWithBounds> generateModelRoiOctrees(double res, b
 {
   static constexpr octomap::key_type MINKV(std::numeric_limits<octomap::key_type>::lowest()), MAXKV(std::numeric_limits<octomap::key_type>::max());
   octomap::OcTreeKey min_key(MAXKV, MAXKV, MAXKV), max_key(MINKV, MINKV, MINKV);
-  auto model_map = loadModelOcrees(res, false, false);
+  auto model_map = loadModelOctrees(res, false, false);
   std::map<std::string, RoiOctreeWithBounds> result_map;
   for (auto it = model_map.begin(); it != model_map.end(); it++)
   {
@@ -26,6 +26,8 @@ std::map<std::string, RoiOctreeWithBounds> generateModelRoiOctrees(double res, b
         setTreeValue(tree.get(), model_tree, model_key, model_key, check_roi_neighbors);
       }
     }
+    tree->computeRoiKeys();
+    ROS_ERROR_STREAM(it->first << " num ROI keys: " << tree->getRoiKeys().size());
     result_map[it->first] = {std::move(tree), min_key, max_key};
   }
   return result_map;
@@ -33,7 +35,7 @@ std::map<std::string, RoiOctreeWithBounds> generateModelRoiOctrees(double res, b
 
 int main()
 {
-  std::array<double, 3> resolutions = {0.005, 0.01, 0.02};
+  std::array<double, 3> resolutions = {0.02, 0.01, 0.005};
   std::array<bool, 2> check_roi_neighbors = {false, true};
 
   for (double res : resolutions)
