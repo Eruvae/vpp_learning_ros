@@ -11,19 +11,19 @@ std::string getModelType(const std::string &name)
 {
   if (boost::algorithm::starts_with(name, "capsicum_plant_6_no_fruits"))
   {
-    return "VG07_6_no_fruits";
+    return "capsicum_plant_6_no_fruits";
   }
   else if (boost::algorithm::starts_with(name, "capsicum_plant_6_one_fruit"))
   {
-    return "VG07_6_one_fruit";
+    return "capsicum_plant_6_one_fruit";
   }
   else if (boost::algorithm::starts_with(name, "capsicum_plant_6_more_occ"))
   {
-    return "VG07_6_more_occ";
+    return "capsicum_plant_6_more_occ";
   }
-  else if (boost::algorithm::starts_with(name, "capsicum_plant_6"))
+  else if (boost::algorithm::starts_with(name, "capsicum_plant_"))
   {
-    return "VG07_6";
+    return name.substr(0, 16);
   }
   else if (boost::algorithm::starts_with(name, "Floor_room"))
   {
@@ -54,6 +54,7 @@ std::vector<ModelInfo> readModelPoses()
     state.model_name = model_states->name[i];
     state.pose = model_states->pose[i];
     state.twist = model_states->twist[i];
+    ROS_ERROR_STREAM("Model name: " << state.model_name);
     model_list.push_back(ModelInfo(getModelType(state.model_name), state));
   }
   return model_list;

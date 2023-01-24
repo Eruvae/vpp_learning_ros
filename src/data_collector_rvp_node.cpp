@@ -70,11 +70,11 @@ void reconfigureCallback(roi_viewpoint_planner::PlannerConfig &config, uint32_t 
   }
   if (level & (1 << 12)) // planner
   {
-    planner->setPlannerId(config.planner);
+    planner->getMotionManager()->setPlannerId(config.planner);
   }
   if (level & (1 << 13)) // planning_time
   {
-    planner->setPlanningTime(config.planning_time);
+    planner->getMotionManager()->setPlanningTime(config.planning_time);
   }
   if (level & (1 << 14)) // use_cartesian_motion
   {
@@ -86,7 +86,7 @@ void reconfigureCallback(roi_viewpoint_planner::PlannerConfig &config, uint32_t 
   }
   if (level & (1 << 16)) // velocity_scaling
   {
-    planner->setMaxVelocityScalingFactor(config.velocity_scaling);
+    planner->getMotionManager()->setMaxVelocityScalingFactor(config.velocity_scaling);
   }
   if (level & (1 << 17)) // record_map_updates
   {
